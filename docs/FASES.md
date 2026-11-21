@@ -32,7 +32,13 @@ archivo y `CHANGELOG.md`, crea la etiqueta `fase-N` y haz push (ver `GIT.md`).
 **Puerta:** resultados idénticos a los esperados en 3 datasets de prueba. Cumplida en el entorno de desarrollo;
 falta confirmarla en tu computador con `python -m pytest`.
 
-## Fase 2 · meses 5 a 8 · Piloto pagado
+## Fase 2 · meses 5 a 8 · Piloto pagado (en curso)
+
+- [x] Lector de XML de factura electrónica de la DGI y paquete `ventas-fe` (Ficha 10)
+- [ ] PDF de estados de cuenta bancarios y conciliación
+- [ ] Copiloto en lenguaje natural (propone SQL visible, el auditor aprueba)
+- [ ] Puntaje de riesgo explicable por transacción
+- [ ] Piloto en un encargo real con horas medidas
 
 PDF y XML de factura electrónica de la DGI, copiloto en lenguaje natural,
 puntaje de riesgo, piloto en un encargo real con horas medidas.

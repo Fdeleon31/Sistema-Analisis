@@ -11,7 +11,8 @@ from . import __version__
 from .bitacora import Bitacora
 from .ejecutor import ResultadoPrueba, cargar_manifiesto, correr_paquete
 from .exportador import exportar_excel
-from .importador import ErrorImportacion, importar
+from .factura_electronica import leer_facturas
+from .importador import ErrorImportacion, importar, validar_identificador
 
 RAIZ = Path(__file__).resolve().parents[1]
 CARPETA_PAQUETES = RAIZ / "paquetes"
@@ -66,6 +67,9 @@ def ejecutar_encargo(
             if definicion.get("opcional"):
                 continue
             raise ErrorImportacion(f"El paquete necesita el archivo '{tabla}' ({definicion.get('descripcion', '')}).")
+        if definicion.get("tipo") == "factura_electronica":
+            controles.append(_cargar_facturas(con, Path(archivos[tabla]), tabla, bitacora))
+            continue
         extra = {k: v for k, v in (opciones.get(tabla) or {}).items() if v not in (None, "", {})}
         controles.append(importar(
             con, archivos[tabla], tabla,
@@ -82,3 +86,22 @@ def ejecutar_encargo(
     cedula = exportar_excel(resultados, controles, bitacora, carpeta / "cedula.xlsx", encargo=encargo)
     con.close()
     return Corrida(manifiesto, controles, resultados, cedula, bitacora, carpeta)
+
+
+def _cargar_facturas(con, ruta: Path, tabla: str, bitacora: Bitacora) -> dict:
+    """Lee los XML de factura electrónica y los registra como tabla; los ilegibles quedan en el control."""
+    tabla = validar_identificador(tabla)
+    lectura = leer_facturas(ruta)
+    if lectura.facturas.empty:
+        raise ErrorImportacion(f"No encontré facturas electrónicas legibles en {ruta.name}.")
+    con.register("_facturas", lectura.facturas)
+    con.execute(f'CREATE OR REPLACE TABLE "{tabla}" AS SELECT * FROM _facturas')
+    con.unregister("_facturas")
+    control = {
+        "archivo": ruta.name, "tabla": tabla, "sha256": lectura.sha256, "filas": len(lectura.facturas),
+        "archivos_xml": lectura.archivos, "filas_excluidas": len(lectura.errores),
+        "detalle_excluidas": [f"{e['archivo']}: {e['error']}" for e in lectura.errores],
+        "codificacion": "XML", "transformaciones": [f"{lectura.archivos} XML leídos; {len(lectura.errores)} ilegibles"],
+    }
+    bitacora.registrar("importacion_fe", **control)
+    return control

@@ -21,7 +21,7 @@ from motor.ejecutor import cargar_encargo, cargar_manifiesto
 from motor.servicio import ejecutar_encargo
 from motor.importador import ErrorImportacion
 from motor.muestreo import ErrorMuestreo, evaluar_mus, muestra_aleatoria, seleccionar_mus
-from motor.sintetico import generar, generar_diario_asientos
+from motor.sintetico import generar, generar_diario_asientos, generar_facturas_fe
 
 RAIZ = Path(__file__).resolve().parent
 
@@ -59,7 +59,8 @@ def correr(paquete: str, archivos: dict[str, Path], encargo_ruta: Path | None, s
     for control in corrida.controles:
         print(f"Archivo: {control['archivo']} · {control['filas']} filas · SHA-256 {control['sha256'][:16]}…")
         if control.get("filas_excluidas"):
-            print(f"  Filas excluidas (totales o en blanco): {control['filas_excluidas']}")
+            motivo = "XML ilegibles" if "archivos_xml" in control else "Filas excluidas (totales o en blanco)"
+            print(f"  {motivo}: {control['filas_excluidas']}")
     print()
     for r in corrida.resultados:
         if r.omitida:
@@ -125,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("ejemplo", help="Mayor sintético con el paquete de excepciones básicas")
     sub.add_parser("ejemplo-asientos", help="Diario y balanza sintéticos con el paquete de asientos NIA 240")
+    sub.add_parser("ejemplo-fe", help="Facturas electrónicas sintéticas contra el mayor de ventas")
 
     p = sub.add_parser("correr", help="Corre un paquete sobre los archivos de un encargo")
     p.add_argument("--archivo", action="append", required=True, help='"mayor=ruta" o "balanza=ruta"; repetible')
@@ -170,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.comando == "ejemplo-asientos":
             mayor, balanza = generar_diario_asientos(RAIZ / "datos" / "ejemplo")
             correr("asientos-nia240", {"mayor": mayor, "balanza": balanza}, RAIZ / "encargos" / "ejemplo-2025.yaml", None, {}, ".")
+        elif args.comando == "ejemplo-fe":
+            zip_fe, mayor = generar_facturas_fe(RAIZ / "datos" / "ejemplo")
+            correr("ventas-fe", {"facturas": zip_fe, "mayor": mayor}, RAIZ / "encargos" / "ejemplo-2025.yaml", None, {}, ".")
         elif args.comando == "muestra":
             muestra(args)
         elif args.comando == "evaluar":

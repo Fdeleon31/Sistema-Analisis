@@ -1,0 +1,18 @@
+{
+  "_nota": "Fijado por el diseño del dataset sintético (motor/sintetico.py, SEMBRADOS_FE) antes de correr el motor.",
+  "archivos_xml": 306,
+  "documentos_leidos": 305,
+  "ilegibles": ["archivo_danado.xml"],
+  "consistencia": {"numeros": [120], "diferencia_total": 10.00},
+  "cufe_duplicado": {"numeros": [77], "veces": 2},
+  "gaps": [["01", "001", 150, 150, 1]],
+  "fuera_periodo": {"numeros": [300], "fecha": "2026-01-03"},
+  "ambiente_pruebas": {"numeros": [250]},
+  "conciliacion": {
+    "meses_con_diferencia": ["2025-06", "2026-01"],
+    "diferencia_junio": -1500.00,
+    "enero_2026": "igual a menos el neto de la factura 300 (no está en el mayor porque es del periodo siguiente)",
+    "meses": 13
+  },
+  "notas_credito": 5
+}

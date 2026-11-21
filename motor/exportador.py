@@ -115,6 +115,10 @@ def _detalle(r: ResultadoPrueba) -> str:
     if "por_criterio" in r.resumen:
         partes = [f"{NOMBRES_CRITERIOS.get(k, k)}: {v}" for k, v in r.resumen["por_criterio"].items() if v]
         return f"{r.excepciones} de {r.resumen['asientos_analizados']} asientos con criterios · " + "; ".join(partes)
+    if "periodos" in r.resumen:
+        return f"{r.excepciones} de {r.resumen['periodos']} periodos con diferencia · diferencia neta {r.resumen['diferencia_total']:,.2f}"
+    if r.resumen.get("informativo"):
+        return "Informativo"
     if "regla" in r.resumen:
         return f"{r.excepciones} asientos seleccionados · regla: {r.resumen['regla']}"
     if "semilla" in r.resumen:

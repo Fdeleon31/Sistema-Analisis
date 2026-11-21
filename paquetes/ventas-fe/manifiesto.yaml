@@ -1,0 +1,78 @@
+id: ventas-fe
+nombre: Ventas contra factura electrónica de la DGI
+version: 0.1.0
+descripcion: >
+  Lee los XML de factura electrónica de la DGI de Panamá (carpeta o ZIP), revisa su consistencia,
+  CUFE repetidos, huecos de numeración, documentos fuera del periodo o del ambiente de pruebas,
+  y concilia por mes las ventas del mayor contra lo facturado. Ficha 10 del cuaderno.
+
+archivos:
+  - tabla: facturas
+    tipo: factura_electronica
+    descripcion: Carpeta o ZIP con los XML de factura electrónica del periodo
+  - tabla: mayor
+    opcional: true
+    descripcion: Mayor general (para la conciliación de ventas)
+    columnas_requeridas: [asiento, linea, fecha, cuenta, descripcion, monto, usuario]
+    columnas_monto: [monto]
+    columnas_fecha: [fecha]
+    claves: [fecha, asiento]
+
+pruebas:
+  - id: fe-resumen
+    nombre: Resumen de documentos por tipo
+    ficha: "10"
+    nia: [NIA 500]
+    sql: pruebas/fe_resumen_tipos.sql
+    identificadores: {facturas: facturas}
+    posproceso: informativo
+
+  - id: fe-consistencia
+    nombre: Facturas con totales inconsistentes
+    ficha: "10"
+    nia: [NIA 500]
+    sql: pruebas/fe_consistencia.sql
+    identificadores: {facturas: facturas}
+
+  - id: fe-cufe-duplicado
+    nombre: CUFE repetido en más de un archivo
+    ficha: "10"
+    nia: [NIA 500, NIA 240]
+    sql: pruebas/fe_cufe_duplicado.sql
+    identificadores: {facturas: facturas}
+
+  - id: fe-gaps
+    nombre: Huecos en la numeración de documentos
+    ficha: "10"
+    nia: [NIA 500]
+    sql: pruebas/fe_gaps.sql
+    identificadores: {facturas: facturas}
+
+  - id: fe-fuera-periodo
+    nombre: Documentos emitidos fuera del periodo
+    ficha: "10"
+    nia: [NIA 500]
+    sql: pruebas/fe_fuera_periodo.sql
+    identificadores: {facturas: facturas}
+    parametros:
+      periodo_inicio: encargo.periodo_inicio
+      fecha_cierre: encargo.fecha_cierre
+
+  - id: fe-ambiente-pruebas
+    nombre: Documentos del ambiente de pruebas (sin validez fiscal)
+    ficha: "10"
+    nia: [NIA 500]
+    sql: pruebas/fe_ambiente_pruebas.sql
+    identificadores: {facturas: facturas}
+
+  - id: fe-vs-mayor
+    nombre: Ventas del mayor contra facturas por mes
+    ficha: "10"
+    nia: [NIA 500, NIA 240]
+    requiere: [mayor]
+    sql: pruebas/fe_vs_mayor.sql
+    identificadores: {facturas: facturas, mayor: mayor, fecha: fecha, monto: monto, cuenta: cuenta}
+    parametros:
+      prefijo_ingresos: encargo.prefijo_ingresos|'4'
+      umbral_trivial: encargo.umbral_trivial
+    posproceso: conciliacion

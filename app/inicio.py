@@ -87,8 +87,10 @@ with pestana_encargo:
     materialidad_ejecucion = c5.number_input("Materialidad de ejecución", min_value=0.0, value=materialidad * 0.75, step=1000.0)
     umbral_trivial = c6.number_input("Umbral trivial", min_value=0.0, value=materialidad * 0.05, step=500.0)
     umbral_aprobacion = c7.number_input("Umbral de aprobación (0 si no aplica)", min_value=0.0, value=10000.0, step=500.0)
+    periodo_inicio = date(fecha_cierre.year, 1, 1) if fecha_cierre.month == 12 else date(fecha_cierre.year - 1, fecha_cierre.month + 1, 1)
     encargo = {
-        "cliente": cliente, "fecha_cierre": fecha_cierre.isoformat(), "marco": marco,
+        "cliente": cliente, "periodo_inicio": periodo_inicio.isoformat(), "fecha_cierre": fecha_cierre.isoformat(), "marco": marco,
+        "prefijo_ingresos": "4",
         "materialidad": materialidad, "materialidad_ejecucion": materialidad_ejecucion,
         "umbral_trivial": umbral_trivial, "umbral_aprobacion": umbral_aprobacion,
     }
@@ -105,6 +107,20 @@ with pestana_encargo:
         tabla = definicion["tabla"]
         etiqueta = f"{tabla.capitalize()}{' (opcional)' if definicion.get('opcional') else ''}"
         with st.expander(f"{etiqueta}: {definicion.get('descripcion', '')}", expanded=not definicion.get("opcional")):
+            if definicion.get("tipo") == "factura_electronica":
+                subidos = st.file_uploader("ZIP o archivos XML de factura electrónica", type=["zip", "xml"],
+                                           accept_multiple_files=True, key=f"archivo_{tabla}")
+                if not subidos:
+                    archivos[tabla] = None
+                    listo = listo and bool(definicion.get("opcional"))
+                    continue
+                destino = carpeta / f"fe_{tabla}"
+                destino.mkdir(exist_ok=True)
+                for s_ in subidos:
+                    _guardar(s_, destino)
+                archivos[tabla] = destino
+                st.caption(f"{len(subidos)} archivo(s) cargado(s); los XML ilegibles se reportarán sin detener la lectura.")
+                continue
             subido = st.file_uploader("Archivo CSV o Excel", type=["csv", "txt", "xlsx", "xlsm", "xls"], key=f"archivo_{tabla}")
             if not subido:
                 archivos[tabla] = None
@@ -169,7 +185,8 @@ with pestana_encargo:
         for control in corrida.controles:
             texto = f"{control['archivo']}: {control['filas']:,} filas"
             if control.get("filas_excluidas"):
-                texto += f" · {control['filas_excluidas']} filas excluidas (totales o en blanco)"
+                motivo = "XML ilegibles" if "archivos_xml" in control else "filas excluidas (totales o en blanco)"
+                texto += f" · {control['filas_excluidas']} {motivo}"
             st.caption(texto)
         resumen = pd.DataFrame([
             {"Ficha": r.ficha, "Prueba": r.nombre, "Resultado": r.omitida or r.excepciones} for r in corrida.resultados

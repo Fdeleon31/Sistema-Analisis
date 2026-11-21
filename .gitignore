@@ -25,3 +25,5 @@ Thumbs.db
 .vscode/
 .idea/
 ~$*.xlsx
+datos/ejemplo/*.zip
+datos/ejemplo/facturas_xml/

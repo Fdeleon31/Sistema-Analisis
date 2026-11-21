@@ -1,7 +1,7 @@
 # Cuadra
 
 Herramienta de analítica de auditoría con IA para firmas latinoamericanas.
-Proyecto personal, en desarrollo por fases. **Estado: Fase 1 (0.4.0): MVP de asientos de diario con muestreo e interfaz para el auditor.**
+Proyecto personal, en desarrollo por fases. **Estado: Fase 2 en curso (0.5.0): asientos de diario, muestreo, interfaz y factura electrónica de la DGI.**
 
 > Repositorio privado. Nunca subas datos de clientes: solo datos sintéticos.
 
@@ -25,6 +25,7 @@ Importa un mayor general (CSV o Excel), guarda su huella SHA-256, corre el paque
 | --- | --- | --- |
 | `excepciones-basicas` | mayor | Benford, duplicados, gaps en asientos y fechas |
 | `asientos-nia240` | mayor y balanza (opcional), más el archivo del encargo | Mayor contra balanza, estratificación, rubros, asientos con criterios de riesgo, selección sugerida y muestra impredecible |
+| `ventas-fe` | ZIP o carpeta de XML de factura electrónica y mayor (opcional) | Consistencia de totales, CUFE repetido, huecos de numeración, fuera de periodo, ambiente de pruebas y conciliación mensual de ventas |
 
 Los diez criterios por asiento: fin de semana o feriado, posterior al cierre, cerca del cierre, monto redondo,
 justo bajo el umbral de aprobación, descripción vacía o genérica, usuario poco frecuente, cuenta poco usada,
@@ -85,6 +86,14 @@ python cuadra.py ejemplo-asientos
 # Un encargo: copia encargos\ejemplo-2025.yaml, ajusta materialidad y cierre, y corre
 python cuadra.py correr --paquete asientos-nia240 --encargo encargos\mi-encargo.yaml `
   --archivo mayor=datos\diario.xlsx --archivo balanza=datos\balanza.csv --hoja Diario --debito-credito "Debe,Haber"
+```
+
+### Factura electrónica de la DGI
+
+```powershell
+python cuadra.py ejemplo-fe
+python cuadra.py correr --paquete ventas-fe --encargo encargos\mi-encargo.yaml `
+  --archivo facturas=datos\facturas_2025.zip --archivo mayor=datos\diario.xlsx
 ```
 
 ### Muestreo

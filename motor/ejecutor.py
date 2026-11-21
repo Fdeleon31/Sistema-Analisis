@@ -17,7 +17,7 @@ from .importador import validar_identificador
 from .muestreo import muestra_aleatoria
 
 PARAMETRO = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
-POSPROCESOS = {"benford", "criterios", "seleccion", "aleatoria"}
+POSPROCESOS = {"benford", "criterios", "seleccion", "aleatoria", "informativo", "conciliacion"}
 CRITERIOS_ASIENTO = [
     "fin_semana_feriado", "posterior_cierre", "cerca_cierre", "monto_redondo", "bajo_umbral",
     "descripcion_sospechosa", "usuario_poco_frecuente", "cuenta_poco_usada", "descuadrado", "sobre_materialidad",
@@ -146,6 +146,14 @@ def correr_prueba(
         resumen["excepciones"] = len(tabla)
         resumen["semilla"] = int(parametros_prueba["semilla"])
         resumen["poblacion_sin_criterios"] = len(sin_criterios)
+    elif posproceso == "informativo":
+        resumen["excepciones"] = 0
+        resumen["informativo"] = True
+    elif posproceso == "conciliacion":
+        diferencias = tabla[tabla["diferencia"].abs() > 0.005]
+        resumen["excepciones"] = len(diferencias)
+        resumen["diferencia_total"] = round(float(tabla["diferencia"].sum()), 2)
+        resumen["periodos"] = len(tabla)
     elif posproceso is not None:
         raise ValueError(f"Posproceso desconocido: {posproceso}. Válidos: {sorted(POSPROCESOS)}")
     else:

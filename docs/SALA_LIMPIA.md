@@ -23,3 +23,5 @@ cuaderno de sala limpia (documento aparte, con fecha por ficha).
 - NIA 240 (revisada), apéndice sobre selección de asientos y otros ajustes (texto publicado por el MIA, 2025).
 - PCAOB AU 316.61: características de asientos inapropiados (sin descripción, sin número de cuenta, montos redondos).
 - AICPA Audit Sampling Guide, apéndice C: factores de confianza de MUS para cero errores (3.00 con 95 %, 2.31 con 90 %).
+- Factura electrónica de Panamá: ficha técnica publicada por la DGI (portal de factura electrónica);
+  nombres de campos en ejemplos públicos de XML (Siteck); tipos de documento en Microsoft Learn (localización de Panamá).

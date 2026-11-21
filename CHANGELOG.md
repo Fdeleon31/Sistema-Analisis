@@ -1,5 +1,16 @@
 # Cambios
 
+## 0.5.0 · Fase 2, factura electrónica de la DGI (noviembre 2026)
+
+- Lector de XML de factura electrónica (`motor/factura_electronica.py`): carpeta, ZIP o XML suelto;
+  ignora espacios de nombres; los XML ilegibles se reportan sin detener la lectura.
+- Paquete `ventas-fe` 0.1.0 (Ficha 10): resumen por tipo de documento, totales inconsistentes,
+  CUFE repetido, huecos de numeración por tipo y punto de facturación, documentos fuera del periodo,
+  ambiente de pruebas y conciliación mensual de ventas del mayor contra lo facturado
+  (sin repetir CUFE, notas de crédito restando).
+- Dataset sintético de 300 facturas con 7 anomalías sembradas; comando `ejemplo-fe`; carga de ZIP o XML en la interfaz.
+- 64 pruebas.
+
 ## 0.4.0 · Fase 1 completa en lo técnico (noviembre 2026)
 
 - Interfaz para el auditor (`iniciar.bat` o `streamlit run app/inicio.py`): datos del encargo,

@@ -1,0 +1,44 @@
+"""Ciclo de estrés: variantes realistas de exportaciones de ERP.
+
+Todas parten del mismo mayor sintético, así que el resultado correcto es
+conocido. Si una variante falla, el importador tiene un problema.
+"""
+import duckdb
+import pytest
+
+from archivos_realistas import generar_variantes
+from motor.ejecutor import cargar_manifiesto, correr_paquete
+from motor.importador import ErrorImportacion, importar
+from test_paquete_excepciones import PAQUETE
+
+FILAS = 4994
+
+
+@pytest.fixture(scope="module")
+def variantes(tmp_path_factory):
+    return generar_variantes(tmp_path_factory.mktemp("variantes"))
+
+
+@pytest.mark.parametrize(
+    "nombre",
+    ["latin1_encabezados_es", "fechas_ddmmaaaa", "montos_texto", "titulo_y_totales",
+     "debe_haber_excel", "asientos_alfanumericos", "utf8_bom", "coma_decimal"],
+)
+def test_variante_da_el_mismo_resultado(variantes, nombre):
+    v = variantes[nombre]
+    manifiesto = cargar_manifiesto(PAQUETE)
+    con = duckdb.connect()
+    control = importar(con, v["ruta"], "mayor", columnas_requeridas=manifiesto["archivos"][0]["columnas_requeridas"], **v["opciones"])
+    assert control["filas"] == FILAS
+    assert control["totales"]["monto"] == 0.0  # el libro diario cuadra
+    r = {x.id: x for x in correr_paquete(con, manifiesto)}
+    assert r["gaps-asientos"].tabla[["desde", "hasta"]].values.tolist() == [[1500, 1502], [2200, 2200]]
+    assert len(r["duplicados-exactos"].tabla) == 4
+    assert len(r["mismo-mismo-distinto"].tabla) == 2
+    assert [d.isoformat() for d in r["gaps-fechas"].tabla["dia"].dt.date] == ["2025-07-15"]
+
+
+def test_fila_de_total_se_excluye_y_se_reporta(variantes):
+    v = variantes["titulo_y_totales"]
+    control = importar(duckdb.connect(), v["ruta"], "mayor", **v["opciones"])
+    assert control["filas_excluidas"] == 1

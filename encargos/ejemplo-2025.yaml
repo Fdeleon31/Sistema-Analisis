@@ -1,0 +1,19 @@
+# Parámetros del encargo. Se aplican a todas las pruebas que los usan.
+# Este es un ejemplo con datos sintéticos; crea uno por encargo real.
+cliente: Cliente Demo, S.A. (sintético)
+periodo_inicio: 2025-01-01
+fecha_cierre: 2025-12-31
+marco: NIIF para PYMES
+materialidad: 150000
+materialidad_ejecucion: 112500
+umbral_trivial: 7500
+umbral_aprobacion: 10000
+dias_cierre: 5
+redondeo: 1000
+usuario_max_asientos: 3
+cuenta_max_asientos: 2
+tamano_muestra_impredecible: 5
+semilla: 2025
+# mapeo_cuentas: mapeo_cuentas.csv   # opcional: cuenta,rubro; reemplaza la regla por prefijo
+preparo: ""
+reviso: ""

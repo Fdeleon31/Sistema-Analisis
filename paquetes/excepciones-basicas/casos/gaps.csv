@@ -1,0 +1,7 @@
+asiento,linea,fecha,cuenta,descripcion,monto,usuario
+1,1,2025-03-03,5101,Gasto,100.00,ana
+2,1,2025-03-04,5101,Gasto,200.00,ana
+3,1,2025-03-04,5101,Gasto,300.00,ana
+5,1,2025-03-07,5101,Gasto,500.00,ana
+6,1,2025-03-10,5101,Gasto,600.00,ana
+9,1,2025-03-10,5101,Gasto,900.00,ana

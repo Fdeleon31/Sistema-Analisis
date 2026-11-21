@@ -1,0 +1,46 @@
+{
+  "_nota": "Resultados esperados calculados a mano con las fórmulas de cada ficha, antes de correr el prototipo.",
+  "benford_todo_uno": {
+    "archivo": "benford_todo_uno.csv",
+    "digitos": 1,
+    "n": 20,
+    "mad": 0.155327,
+    "conformidad": "No conforme",
+    "z_digito_1": 6.571,
+    "calculo": "MAD = (|1 - log10(2)| + suma de las proporciones esperadas de 2 a 9) / 9 = (0.69897 + 0.69897) / 9"
+  },
+  "benford_ideal": {
+    "archivo": "benford_ideal.csv",
+    "digitos": 1,
+    "n": 1000,
+    "mad": 0.000101,
+    "conformidad": "Conformidad cercana",
+    "calculo": "Conteos 301, 176, 125, 97, 79, 67, 58, 51, 46: proporciones de Benford redondeadas a 3 decimales"
+  },
+  "duplicados_exactos": {
+    "archivo": "duplicados.csv",
+    "claves": ["fecha", "cuenta", "monto", "descripcion"],
+    "filas": 4,
+    "asientos": [1, 2],
+    "veces": 2
+  },
+  "mismo_mismo_distinto": {
+    "archivo": "duplicados.csv",
+    "claves": ["asiento"],
+    "distinto": "fecha",
+    "filas": 2,
+    "asientos": [4]
+  },
+  "gaps_numericos": {
+    "archivo": "gaps.csv",
+    "rangos": [[4, 4, 1], [7, 8, 2]]
+  },
+  "gaps_fechas_habiles": {
+    "archivo": "gaps.csv",
+    "dias": ["2025-03-05", "2025-03-06"]
+  },
+  "gaps_fechas_todos": {
+    "archivo": "gaps.csv",
+    "dias": ["2025-03-05", "2025-03-06", "2025-03-08", "2025-03-09"]
+  }
+}

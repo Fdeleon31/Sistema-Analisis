@@ -1,0 +1,70 @@
+id: excepciones-basicas
+nombre: Excepciones básicas sobre el mayor
+version: 0.2.0
+descripcion: >
+  Pruebas de Benford, duplicados y gaps sobre el mayor general o libro diario.
+  Especificadas en las fichas 01, 02 y 03 del cuaderno de sala limpia.
+
+archivos:
+  - tabla: mayor
+    descripcion: Mayor general o libro diario, una fila por línea de asiento
+    columnas_requeridas: [asiento, linea, fecha, cuenta, descripcion, monto, usuario]
+
+# Tablas que trae el paquete y se cargan antes de correr las pruebas.
+auxiliares:
+  - tabla: feriados
+    archivo: calendario/feriados_pa.csv
+    descripcion: Feriados nacionales de Panamá; actualizar cada año con el calendario oficial
+
+pruebas:
+  - id: benford-primer-digito
+    nombre: Ley de Benford, primer dígito
+    ficha: "01"
+    nia: [NIA 240, NIA 520]
+    sql: pruebas/benford_conteo.sql
+    identificadores: {tabla: mayor, monto: monto}
+    parametros: {digitos: 1, monto_minimo: 10, n_minimo: 1000}
+    posproceso: benford
+
+  - id: benford-dos-digitos
+    nombre: Ley de Benford, primeros dos dígitos
+    ficha: "01"
+    nia: [NIA 240, NIA 520]
+    sql: pruebas/benford_conteo.sql
+    identificadores: {tabla: mayor, monto: monto}
+    parametros: {digitos: 2, monto_minimo: 10, n_minimo: 1000}
+    posproceso: benford
+
+  - id: duplicados-exactos
+    nombre: Duplicados exactos (fecha, cuenta, monto, descripción)
+    ficha: "02"
+    nia: [NIA 240]
+    sql: pruebas/duplicados_exactos.sql
+    identificadores:
+      tabla: mayor
+      claves: [fecha, cuenta, monto, descripcion]
+
+  - id: mismo-mismo-distinto
+    nombre: Mismo asiento con fechas distintas
+    ficha: "02"
+    nia: [NIA 240]
+    sql: pruebas/mismo_mismo_distinto.sql
+    identificadores:
+      tabla: mayor
+      claves: [asiento]
+      distinto: fecha
+
+  - id: gaps-asientos
+    nombre: Gaps en la numeración de asientos
+    ficha: "03"
+    nia: [NIA 240, NIA 500]
+    sql: pruebas/gaps_numericos.sql
+    identificadores: {tabla: mayor, campo: asiento}
+
+  - id: gaps-fechas
+    nombre: Días hábiles sin registros
+    ficha: "03"
+    nia: [NIA 500]
+    sql: pruebas/gaps_fechas.sql
+    identificadores: {tabla: mayor, campo: fecha, feriados: feriados}
+    parametros: {solo_habiles: true, excluir_feriados: true}

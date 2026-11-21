@@ -1,0 +1,113 @@
+id: asientos-nia240
+nombre: Pruebas de asientos de diario (NIA 240)
+version: 0.1.0
+descripcion: >
+  Integridad del mayor contra la balanza, estratificación, sumarización por rubro,
+  criterios de riesgo por asiento, selección sugerida y muestra impredecible.
+  Especificado en las fichas 04, 06, 07 y 09 del cuaderno de sala limpia.
+
+archivos:
+  - tabla: mayor
+    descripcion: Mayor general o libro diario, una fila por línea de asiento
+    columnas_requeridas: [asiento, linea, fecha, cuenta, descripcion, monto, usuario]
+    columnas_monto: [monto]
+    columnas_fecha: [fecha]
+    claves: [fecha, asiento]
+  - tabla: balanza
+    opcional: true
+    descripcion: Balanza de comprobación con saldo inicial y final por cuenta
+    columnas_requeridas: [cuenta, saldo_inicial, saldo_final]
+    columnas_monto: [saldo_inicial, saldo_final]
+    columnas_fecha: []
+    claves: [cuenta]
+
+auxiliares:
+  - tabla: feriados
+    archivo: ../excepciones-basicas/calendario/feriados_pa.csv
+    descripcion: Feriados nacionales de Panamá
+  - tabla: reglas_rubros
+    archivo: referencias/reglas_rubros.csv
+    descripcion: Rubro por prefijo de cuenta (regla genérica)
+  - tabla: mapeo_cliente
+    desde_encargo: mapeo_cuentas
+    columnas: [cuenta, rubro]
+    descripcion: Mapeo de cuentas del cliente; reemplaza la regla y se reutiliza el año siguiente
+
+# Parámetros comunes de los criterios; "encargo.x" se toma del archivo del encargo
+# y "encargo.x|valor" usa el valor indicado si el encargo no lo trae.
+criterios: &criterios
+  fecha_cierre: encargo.fecha_cierre
+  dias_cierre: encargo.dias_cierre|5
+  materialidad_ejecucion: encargo.materialidad_ejecucion
+  umbral_aprobacion: encargo.umbral_aprobacion|0
+  banda_umbral: 0.10
+  redondeo: encargo.redondeo|1000
+  usuario_max_asientos: encargo.usuario_max_asientos|3
+  cuenta_max_asientos: encargo.cuenta_max_asientos|2
+  patron_descripcion: '(ajust|varios|error|revers|reclasif|correcc|otros|sin descrip)'
+  minimo_criterios: 2
+  tamano_aleatoria: encargo.tamano_muestra_impredecible|5
+  semilla: encargo.semilla|2025
+
+identificadores_mayor: &mayor
+  tabla: mayor
+  asiento: asiento
+  fecha: fecha
+  cuenta: cuenta
+  descripcion: descripcion
+  monto: monto
+  usuario: usuario
+  feriados: feriados
+
+pruebas:
+  - id: integridad-balanza
+    nombre: Mayor contra balanza (saldo inicial + movimientos = saldo final)
+    ficha: "07"
+    nia: [NIA 500, NIA 240]
+    requiere: [balanza]
+    sql: pruebas/integridad_balanza.sql
+    identificadores: {mayor: mayor, balanza: balanza, cuenta: cuenta, monto: monto, saldo_inicial: saldo_inicial, saldo_final: saldo_final}
+
+  - id: estratificacion
+    nombre: Estratificación de líneas por materialidad
+    ficha: "06"
+    nia: [NIA 520, NIA 530]
+    sql: pruebas/estratificacion.sql
+    identificadores: {tabla: mayor, monto: monto}
+    parametros:
+      umbral_trivial: encargo.umbral_trivial
+      materialidad_ejecucion: encargo.materialidad_ejecucion
+
+  - id: sumarizacion-rubros
+    nombre: Sumarización por rubro
+    ficha: "09"
+    nia: [NIA 315, NIA 520]
+    sql: pruebas/sumarizacion_rubros.sql
+    identificadores: {tabla: mayor, cuenta: cuenta, monto: monto, reglas: reglas_rubros, mapeo_cliente: mapeo_cliente}
+
+  - id: asientos-criterios
+    nombre: Asientos con criterios de riesgo
+    ficha: "04"
+    nia: [NIA 240]
+    sql: pruebas/asientos_criterios.sql
+    identificadores: *mayor
+    parametros: *criterios
+    posproceso: criterios
+
+  - id: asientos-seleccion
+    nombre: Selección sugerida de asientos para probar
+    ficha: "04"
+    nia: [NIA 240]
+    sql: pruebas/asientos_criterios.sql
+    identificadores: *mayor
+    parametros: *criterios
+    posproceso: seleccion
+
+  - id: asientos-impredecible
+    nombre: Muestra impredecible de asientos sin criterios
+    ficha: "04"
+    nia: [NIA 240]
+    sql: pruebas/asientos_criterios.sql
+    identificadores: *mayor
+    parametros: *criterios
+    posproceso: aleatoria

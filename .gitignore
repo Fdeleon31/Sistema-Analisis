@@ -1,0 +1,27 @@
+# Entorno de Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Resultados generados (se regeneran con cuadra.py)
+salidas/*
+!salidas/.gitkeep
+datos/ejemplo/*.csv
+
+# Nunca subir datos reales de clientes
+datos/clientes/
+*.duckdb
+*.duckdb.wal
+
+# Secretos y configuración local
+.env
+*.key
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+~$*.xlsx

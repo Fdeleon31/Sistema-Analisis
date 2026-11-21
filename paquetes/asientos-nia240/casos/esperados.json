@@ -1,0 +1,45 @@
+{
+  "_nota": "Resultados esperados fijados antes de correr el motor: los asientos sembrados vienen del diseño del dataset (motor/sintetico.py) y el MUS se calculó a mano.",
+  "dataset_1_estandar": {
+    "descripcion": "Diario y balanza 2025 en CSV estándar, semilla 7, 1,200 asientos",
+    "asientos_analizados": 1200,
+    "criterios_por_asiento": {
+      "101": ["fin_semana_feriado"],
+      "202": ["fin_semana_feriado"],
+      "303": ["monto_redondo"],
+      "404": ["usuario_poco_frecuente"],
+      "505": ["cuenta_poco_usada"],
+      "606": ["descripcion_sospechosa"],
+      "707": ["descuadrado"],
+      "808": ["cerca_cierre"],
+      "909": ["bajo_umbral"],
+      "1001": ["sobre_materialidad"],
+      "1111": ["fin_semana_feriado", "monto_redondo", "descripcion_sospechosa", "usuario_poco_frecuente"]
+    },
+    "seleccion": ["1111", "1001", "707"],
+    "integridad_balanza": [
+      ["2999", -200.00, "El saldo cambia sin movimientos en el mayor"],
+      ["5204", -1234.56, "Diferencia entre balanza y mayor"],
+      ["6999", null, "En el mayor, no en la balanza"]
+    ],
+    "lineas": 2400,
+    "tamano_muestra_impredecible": 5
+  },
+  "dataset_2_erp": {
+    "descripcion": "Mismo diseño con otra semilla (11), exportado como ERP: Excel con portada, Debe y Haber, fechas dd/mm/aaaa, asientos JE-000000, encabezados en español; balanza en Windows-1252 con título, miles y fila de total",
+    "prefijo": "JE-",
+    "ancho": 6
+  },
+  "dataset_3_mus": {
+    "archivo": "cxc_mus.csv",
+    "valor_libros": 180000.00,
+    "error_tolerable": 45000.00,
+    "confianza_95": {"n": 12, "intervalo": 15000.00, "inicio": 4000.00,
+                     "seleccion": {"C01": 1, "C03": 3, "C04": 1, "C05": 1, "C06": 1, "C07": 4, "C09": 1},
+                     "superan_intervalo": ["C03", "C05", "C07", "C09"]},
+    "confianza_90": {"n": 10},
+    "error_esperado_5000_factor_1_6": {"n": 15},
+    "excluidos": {"partidas": 2, "valor": -500.00},
+    "calculo": "n = 180000 x 3.00 / 45000 = 12; J = 15000; puntos 4000, 19000, ..., 169000 sobre acumulados C01 12000, C02 15500, C03 63500, C04 64250, C05 86500, C06 96300, C07 157300, C08 158500, C09 174000, C10 180000. Con 90 %: 180000 x 2.31 / 45000 = 9.24, arriba 10. Con error esperado: 540000 / (45000 - 5000 x 1.6) = 14.59, arriba 15"
+  }
+}

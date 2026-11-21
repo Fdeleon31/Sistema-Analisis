@@ -87,6 +87,9 @@ python cuadra.py correr --paquete asientos-nia240 --encargo encargos\mi-encargo.
 # MUS: tamaño, intervalo y selección (inicio aleatorio con semilla, o --inicio explícito)
 python cuadra.py muestra --archivo datos\cxc.xlsx --id cliente --valor saldo --tolerable 45000 --confianza 95
 
+# Evaluar la muestra con los errores encontrados (límite superior de error)
+python cuadra.py evaluar --errores datos\errores.csv --intervalo 15000 --tolerable 45000
+
 # Aleatorio simple repetible
 python cuadra.py muestra --archivo datos\cxc.xlsx --id cliente --metodo aleatorio --n 25 --semilla 2025
 ```

@@ -22,7 +22,7 @@ from motor.bitacora import Bitacora
 from motor.ejecutor import cargar_encargo, cargar_manifiesto, correr_paquete
 from motor.exportador import exportar_excel
 from motor.importador import ErrorImportacion, importar
-from motor.muestreo import ErrorMuestreo, muestra_aleatoria, seleccionar_mus
+from motor.muestreo import ErrorMuestreo, evaluar_mus, muestra_aleatoria, seleccionar_mus
 from motor.sintetico import generar, generar_diario_asientos
 
 RAIZ = Path(__file__).resolve().parent
@@ -129,6 +129,24 @@ def muestra(args) -> Path:
     return destino
 
 
+def evaluar(args) -> Path:
+    ruta = Path(args.errores)
+    df = pd.read_excel(ruta) if ruta.suffix.lower() in (".xlsx", ".xls") else pd.read_csv(ruta)
+    r = evaluar_mus(df, args.intervalo, args.tolerable, args.confianza, args.id, args.libros, args.auditado)
+    carpeta = args.salida or RAIZ / "salidas" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    carpeta.mkdir(parents=True, exist_ok=True)
+    destino = carpeta / "evaluacion_mus.xlsx"
+    with pd.ExcelWriter(destino) as xls:
+        pd.DataFrame(list(r.resumen().items()), columns=["Concepto", "Valor"]).to_excel(xls, sheet_name="Resumen", index=False)
+        r.detalle.to_excel(xls, sheet_name="Sobrestimaciones", index=False)
+        r.subestimaciones.to_excel(xls, sheet_name="Subestimaciones", index=False)
+    print(f"\nEvaluación MUS · precisión básica {r.precision_basica:,.2f} · proyectado {r.error_proyectado:,.2f} · "
+          f"margen {r.margen_incremental:,.2f} · límite superior {r.limite_superior:,.2f}")
+    print(r.conclusion)
+    print(f"Evaluación: {destino}\n")
+    return destino
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cuadra", description="Analítica de auditoría (prototipo)")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -162,6 +180,16 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--n", type=int, help="Tamaño (aleatorio simple)")
     m.add_argument("--salida", type=Path)
 
+    ev = sub.add_parser("evaluar", help="Evalúa una muestra MUS con los errores encontrados")
+    ev.add_argument("--errores", required=True, help="CSV o Excel con id, valor en libros y valor auditado")
+    ev.add_argument("--intervalo", type=float, required=True)
+    ev.add_argument("--tolerable", type=float, required=True)
+    ev.add_argument("--confianza", type=int, default=95, choices=[90, 95])
+    ev.add_argument("--id", default="id")
+    ev.add_argument("--libros", default="valor_libros")
+    ev.add_argument("--auditado", default="valor_auditado")
+    ev.add_argument("--salida", type=Path)
+
     args = parser.parse_args(argv)
     try:
         if args.comando == "ejemplo":
@@ -172,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
             correr("asientos-nia240", {"mayor": mayor, "balanza": balanza}, RAIZ / "encargos" / "ejemplo-2025.yaml", None, {}, ".")
         elif args.comando == "muestra":
             muestra(args)
+        elif args.comando == "evaluar":
+            evaluar(args)
         else:
             manifiesto = cargar_manifiesto(RAIZ / "paquetes" / args.paquete)
             opciones = {

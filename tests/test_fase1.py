@@ -166,3 +166,37 @@ def test_d3_aleatorio_simple_repetible():
     a = muestra_aleatoria(CXC, "cliente", 4, semilla=1)
     b = muestra_aleatoria(CXC, "cliente", 4, semilla=1)
     assert a["cliente"].tolist() == b["cliente"].tolist() and len(a) == 4
+
+
+# Ficha 05b · evaluación MUS calculada a mano
+
+from motor.muestreo import evaluar_mus  # noqa: E402
+
+EV = E3["evaluacion"]
+ERRORES = pd.read_csv(PAQUETE / "casos" / EV["archivo"])
+
+
+def test_evaluacion_mus_sin_errores_es_la_precision_basica():
+    sin = ERRORES.assign(valor_auditado=ERRORES["valor_libros"])
+    r = evaluar_mus(sin, EV["intervalo"], EV["error_tolerable"], EV["confianza"])
+    assert r.limite_superior == EV["sin_errores"]["limite_superior"]
+    assert "no supera" in r.conclusion
+
+
+def test_evaluacion_mus_con_errores_identica_al_calculo_manual():
+    r = evaluar_mus(ERRORES, EV["intervalo"], EV["error_tolerable"], EV["confianza"])
+    e = EV["con_errores"]
+    assert r.precision_basica == e["precision_basica"]
+    assert dict(zip(r.detalle["id"], r.detalle["proyectado"])) == e["proyectados"]
+    assert dict(zip(r.detalle["id"], r.detalle["margen_incremental"])) == e["margenes"]
+    assert (r.error_proyectado, r.margen_incremental, r.limite_superior) == (e["error_proyectado"], e["margen_incremental"], e["limite_superior"])
+    assert "supera el error tolerable" in r.conclusion
+
+
+def test_evaluacion_mus_separa_subestimaciones_y_limita_factores():
+    sub = pd.DataFrame({"id": ["A", "B", "C", "D", "E"], "valor_libros": [100, 200, 300, 400, 500],
+                        "valor_auditado": [150, 100, 100, 100, 100]})
+    with pytest.raises(ErrorMuestreo, match="factores siguientes"):
+        evaluar_mus(sub, 15000, 45000)
+    r = evaluar_mus(sub.head(2), 15000, 45000)
+    assert r.subestimaciones["id"].tolist() == ["A"]

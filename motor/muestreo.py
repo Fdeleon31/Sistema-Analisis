@@ -133,3 +133,86 @@ def muestra_aleatoria(poblacion: pd.DataFrame, columna_id: str, tamano: int, sem
         raise ErrorMuestreo(f"La muestra ({tamano}) es mayor que la población ({len(ordenada)}).")
     indices = sorted(random.Random(semilla).sample(range(len(ordenada)), tamano))
     return ordenada.iloc[indices].reset_index(drop=True)
+
+
+# --- Ficha 05b · Evaluación de la muestra MUS ------------------------------------------
+
+# AICPA Audit Sampling Guide, apéndice C, tabla C-3 (sobrestimaciones), por nivel de confianza.
+FACTORES_EVALUACION = {
+    95: [3.00, 4.75, 6.30, 7.76],
+    90: [2.31, 3.89, 5.33, 6.69],
+}
+
+
+@dataclass
+class EvaluacionMUS:
+    intervalo: float
+    nivel_confianza: int
+    error_tolerable: float
+    precision_basica: float
+    error_proyectado: float
+    margen_incremental: float
+    limite_superior: float
+    conclusion: str
+    detalle: pd.DataFrame
+    subestimaciones: pd.DataFrame
+
+    def resumen(self) -> dict:
+        return {k: v for k, v in self.__dict__.items() if not isinstance(v, pd.DataFrame)}
+
+
+def evaluar_mus(
+    errores: pd.DataFrame,
+    intervalo: float,
+    error_tolerable: float,
+    nivel_confianza: int = 95,
+    columna_id: str = "id",
+    columna_libros: str = "valor_libros",
+    columna_auditado: str = "valor_auditado",
+) -> EvaluacionMUS:
+    """Límite superior de error por sobrestimación (método de la tabla C-3)."""
+    if nivel_confianza not in FACTORES_EVALUACION:
+        raise ErrorMuestreo(f"Nivel de confianza {nivel_confianza} no soportado. Usa 90 o 95.")
+    factores = FACTORES_EVALUACION[nivel_confianza]
+
+    datos = errores[[columna_id, columna_libros, columna_auditado]].copy()
+    datos.columns = ["id", "valor_libros", "valor_auditado"]
+    datos["valor_libros"] = pd.to_numeric(datos["valor_libros"])
+    datos["valor_auditado"] = pd.to_numeric(datos["valor_auditado"])
+    datos["error"] = (datos["valor_libros"] - datos["valor_auditado"]).round(2)
+    if (datos["valor_libros"] <= 0).any():
+        raise ErrorMuestreo("Las partidas con error deben tener valor en libros positivo.")
+
+    subestimaciones = datos[datos["error"] < 0].reset_index(drop=True)
+    sobre = datos[datos["error"] > 0].copy()
+    sobre["supera_intervalo"] = sobre["valor_libros"] >= intervalo
+    sobre["contaminacion"] = (sobre["error"] / sobre["valor_libros"]).round(6)
+    sobre["proyectado"] = sobre.apply(
+        lambda f: f["error"] if f["supera_intervalo"] else f["contaminacion"] * intervalo, axis=1
+    ).round(2) if len(sobre) else []
+
+    menores = sobre[~sobre["supera_intervalo"]].sort_values("contaminacion", ascending=False, kind="stable")
+    if len(menores) > len(factores) - 1:
+        raise ErrorMuestreo(
+            f"Hay {len(menores)} errores en partidas menores que el intervalo; la tabla incluida llega a "
+            f"{len(factores) - 1}. Agrega los factores siguientes de la tabla C-3 antes de evaluar."
+        )
+    margenes = {}
+    for k, (indice, fila) in enumerate(menores.iterrows(), start=1):
+        margenes[indice] = round((factores[k] - factores[k - 1] - 1) * fila["proyectado"], 2)
+    sobre["margen_incremental"] = [margenes.get(i, 0.0) for i in sobre.index]
+    sobre["orden"] = [list(menores.index).index(i) + 1 if i in margenes else None for i in sobre.index]
+
+    precision = round(intervalo * factores[0], 2)
+    proyectado = round(float(sobre["proyectado"].sum()) if len(sobre) else 0.0, 2)
+    margen = round(float(sobre["margen_incremental"].sum()) if len(sobre) else 0.0, 2)
+    limite = round(precision + proyectado + margen, 2)
+    if limite <= error_tolerable:
+        conclusion = (f"El límite superior de error ({limite:,.2f}) no supera el error tolerable "
+                      f"({error_tolerable:,.2f}): la muestra respalda que el saldo no tiene un error material.")
+    else:
+        conclusion = (f"El límite superior de error ({limite:,.2f}) supera el error tolerable "
+                      f"({error_tolerable:,.2f}): la muestra no permite concluir; considera ampliar pruebas o ajustar el saldo.")
+    detalle = sobre.sort_values(["supera_intervalo", "contaminacion"], ascending=[False, False]).reset_index(drop=True)
+    return EvaluacionMUS(intervalo, nivel_confianza, error_tolerable, precision, proyectado, margen, limite,
+                         conclusion, detalle, subestimaciones)

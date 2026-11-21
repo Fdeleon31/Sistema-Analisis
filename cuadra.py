@@ -14,14 +14,12 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import duckdb
 import pandas as pd
 
 from motor import __version__
-from motor.bitacora import Bitacora
-from motor.ejecutor import cargar_encargo, cargar_manifiesto, correr_paquete
-from motor.exportador import exportar_excel
-from motor.importador import ErrorImportacion, importar
+from motor.ejecutor import cargar_encargo, cargar_manifiesto
+from motor.servicio import ejecutar_encargo
+from motor.importador import ErrorImportacion
 from motor.muestreo import ErrorMuestreo, evaluar_mus, muestra_aleatoria, seleccionar_mus
 from motor.sintetico import generar, generar_diario_asientos
 
@@ -51,45 +49,19 @@ def correr(paquete: str, archivos: dict[str, Path], encargo_ruta: Path | None, s
            mapeo: dict[str, str], decimal: str, **opciones) -> Path:
     manifiesto = cargar_manifiesto(RAIZ / "paquetes" / paquete)
     encargo = cargar_encargo(encargo_ruta)
-    carpeta = salida or RAIZ / "salidas" / datetime.now().strftime("%Y%m%d-%H%M%S")
-    carpeta.mkdir(parents=True, exist_ok=True)
-    bitacora = Bitacora(carpeta / "bitacora.jsonl")
-    bitacora.registrar("inicio", version_motor=__version__, paquete=manifiesto["id"],
-                       version_paquete=manifiesto["version"], encargo=str(encargo_ruta) if encargo_ruta else None)
-
-    con = duckdb.connect()
-    controles = []
-    for definicion in manifiesto["archivos"]:
-        tabla = definicion["tabla"]
-        if tabla not in archivos:
-            if definicion.get("opcional"):
-                continue
-            raise ErrorImportacion(f"El paquete necesita el archivo '{tabla}'. Pásalo con --archivo {tabla}=ruta")
-        es_principal = definicion is manifiesto["archivos"][0]
-        controles.append(importar(
-            con, archivos[tabla], tabla,
-            mapeo=mapeo if es_principal else None,
-            columnas_requeridas=definicion["columnas_requeridas"],
-            columnas_monto=definicion.get("columnas_monto"),
-            columnas_fecha=definicion.get("columnas_fecha"),
-            claves=definicion.get("claves"),
-            separador_decimal=decimal,
-            bitacora=bitacora,
-            **(opciones if es_principal else {}),
-        ))
-
-    resultados = correr_paquete(con, manifiesto, bitacora, encargo)
-    ruta_excel = exportar_excel(resultados, controles, bitacora, carpeta / "cedula.xlsx", encargo=encargo)
+    principal = manifiesto["archivos"][0]["tabla"]
+    corrida = ejecutar_encargo(paquete, archivos, encargo, salida,
+                               opciones={principal: {"mapeo": mapeo, **opciones}}, separador_decimal=decimal)
 
     print(f"\nCuadra {__version__} · paquete {manifiesto['id']} {manifiesto['version']}")
     if encargo.get("cliente"):
         print(f"Encargo: {encargo['cliente']} · cierre {encargo.get('fecha_cierre')}")
-    for control in controles:
+    for control in corrida.controles:
         print(f"Archivo: {control['archivo']} · {control['filas']} filas · SHA-256 {control['sha256'][:16]}…")
         if control.get("filas_excluidas"):
             print(f"  Filas excluidas (totales o en blanco): {control['filas_excluidas']}")
     print()
-    for r in resultados:
+    for r in corrida.resultados:
         if r.omitida:
             print(f"  [{r.ficha}] {r.nombre:<62} {r.omitida}")
             continue
@@ -97,9 +69,9 @@ def correr(paquete: str, archivos: dict[str, Path], encargo_ruta: Path | None, s
         if r.resumen.get("advertencia"):
             detalle += "  ⚠ muestra pequeña"
         print(f"  [{r.ficha}] {r.nombre:<62} resultado: {r.excepciones:>4}  {detalle}")
-    print(f"\nBitácora íntegra: {'sí' if bitacora.verificar() else 'NO'}")
-    print(f"Cédula: {ruta_excel}\n")
-    return ruta_excel
+    print(f"\nBitácora íntegra: {'sí' if corrida.bitacora.verificar() else 'NO'}")
+    print(f"Cédula: {corrida.cedula}\n")
+    return corrida.cedula
 
 
 def muestra(args) -> Path:

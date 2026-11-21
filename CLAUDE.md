@@ -1,7 +1,7 @@
 # Cuadra · contexto para Claude Code
 
 Herramienta de analítica de auditoría con IA para firmas latinoamericanas (Panamá primero).
-Proyecto personal de Felipe, desarrollado fuera de su empleo. Estado: Fase 1 técnica lista (0.3.0).
+Proyecto personal de Felipe, desarrollado fuera de su empleo. Estado: Fase 1 técnica completa (0.4.0); Fase 2 en curso.
 Responde y documenta en español.
 
 ## Reglas que no se rompen
@@ -19,7 +19,8 @@ Responde y documenta en español.
 
 ## Estructura
 
-- `cuadra.py`: línea de comandos (`ejemplo`, `ejemplo-asientos`, `correr`, `muestra`).
+- `cuadra.py`: línea de comandos (`ejemplo`, `ejemplo-asientos`, `correr`, `muestra`, `evaluar`).
+- `app/inicio.py` + `iniciar.bat`: interfaz del auditor (Streamlit, local). Usa `motor/servicio.py` y `motor/sugerencias.py`.
 - `motor/`: `importador.py` (normalización y control), `ejecutor.py` (manifiestos, parámetros del encargo, posprocesos),
   `estadistica.py` (Benford), `muestreo.py` (MUS y aleatorio), `exportador.py` (cédula Excel), `bitacora.py` (JSONL encadenado),
   `sintetico.py` (datasets con anomalías sembradas).
@@ -45,10 +46,8 @@ python cuadra.py muestra --archivo ... --id cliente --valor saldo --tolerable 45
 1. Confirmar que `python -m pytest` pasa 48 de 48 en Windows; corregir lo que falle.
 2. Probar con la estructura de 3 exportaciones reales (Felipe trae encabezados y formato, sin datos);
    agregarlas como variantes en `tests/archivos_realistas.py` y repetir el ciclo hasta que pasen.
-3. Evaluación de muestras MUS con errores (proyección y límite superior de error, factores del apéndice C del AICPA). Ficha antes del código.
-4. Decidir y construir la interfaz del auditor (app local sencilla o complemento de Excel) para que sea plug and play.
-5. Fase 2: lector de XML de factura electrónica de la DGI (CUFE), PDF de estados bancarios, copiloto en lenguaje natural, puntaje de riesgo.
-6. Verificar los feriados 2025 en `paquetes/excepciones-basicas/calendario/feriados_pa.csv` contra el calendario oficial.
+3. Fase 2: lector de XML de factura electrónica de la DGI (CUFE), PDF de estados bancarios, copiloto en lenguaje natural, puntaje de riesgo.
+4. Confirmar el feriado del 10 de noviembre de 2025 (único sin fuente en `feriados_pa.csv`).
 
 Plan completo, fichas y criterios de cada fase: cuaderno de sala limpia (https://claude.ai/artifact/VVB2FfSa5sQFY9ibuDzUzz)
 y plano de producto (https://claude.ai/artifact/CYvnqev8ukQABGew8uvooj).

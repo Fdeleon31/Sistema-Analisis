@@ -27,7 +27,7 @@ archivo y `CHANGELOG.md`, crea la etiqueta `fase-N` y haz push (ver `GIT.md`).
 - [x] Puerta técnica: 3 datasets con resultados idénticos a los esperados (tests/test_fase1.py)
 - [ ] Probar con la estructura de 3 exportaciones reales (encabezados y formato, sin datos de clientes)
 - [x] Evaluación de muestras MUS con límite superior de error (Ficha 05b)
-- [ ] Interfaz para el auditor (decidir: app local sencilla o complemento de Excel)
+- [x] Interfaz para el auditor: app local en el navegador (`iniciar.bat`), con columnas sugeridas y confirmadas
 
 **Puerta:** resultados idénticos a los esperados en 3 datasets de prueba. Cumplida en el entorno de desarrollo;
 falta confirmarla en tu computador con `python -m pytest`.

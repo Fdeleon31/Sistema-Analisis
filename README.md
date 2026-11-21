@@ -1,7 +1,7 @@
 # Cuadra
 
 Herramienta de analítica de auditoría con IA para firmas latinoamericanas.
-Proyecto personal, en desarrollo por fases. **Estado: Fase 1 (0.3.0): MVP de asientos de diario con muestreo, puerta técnica superada.**
+Proyecto personal, en desarrollo por fases. **Estado: Fase 1 (0.4.0): MVP de asientos de diario con muestreo e interfaz para el auditor.**
 
 > Repositorio privado. Nunca subas datos de clientes: solo datos sintéticos.
 
@@ -44,7 +44,13 @@ pip install -r requirements.txt
 Si PowerShell bloquea la activación, corre una vez
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` o usa `.venv\Scripts\activate.bat` desde CMD.
 
-## Uso
+## Uso sin consola (recomendado para auditores)
+
+Doble clic en **`iniciar.bat`**. La primera vez prepara todo (tarda unos minutos); después abre
+Cuadra en el navegador. Ahí llenas los datos del encargo, subes el diario y la balanza, confirmas
+las columnas que Cuadra sugiere y descargas la cédula. Los archivos se procesan solo en tu computador.
+
+## Uso por consola
 
 ```powershell
 # Demo con un mayor sintético que trae anomalías sembradas

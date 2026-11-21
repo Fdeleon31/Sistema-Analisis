@@ -1,5 +1,16 @@
 # Cambios
 
+## 0.4.0 · Fase 1 completa en lo técnico (noviembre 2026)
+
+- Interfaz para el auditor (`iniciar.bat` o `streamlit run app/inicio.py`): datos del encargo,
+  carga de archivos con vista previa, detección de hoja, fila de encabezado y Debe/Haber,
+  columnas sugeridas que el auditor confirma, resultados en pantalla y descarga de la cédula.
+  Pestaña de muestreo MUS: selección y evaluación.
+- Evaluación de muestras MUS (Ficha 05b) y comando `evaluar`.
+- Servicio único (`motor/servicio.py`) que usan la línea de comandos y la interfaz.
+- Sugerencia de columnas por reglas (`motor/sugerencias.py`), sin IA; la IA llegará en la Fase 2.
+- Feriados 2025 con fuente por fecha. 58 pruebas.
+
 ## 0.3.0 · Fase 1, MVP de asientos de diario (noviembre 2026)
 
 - Paquete `asientos-nia240` 0.1.0: mayor contra balanza (Ficha 07), estratificación por materialidad (Ficha 06),

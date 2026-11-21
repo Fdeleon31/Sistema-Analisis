@@ -7,7 +7,7 @@
 2. En PowerShell:
 
 ```powershell
-cd $HOME\OneDrive\Desktop\cuadra
+cd "$HOME\OneDrive\Desktop\Sistema Analisis"
 git init -b main
 git add .
 git commit -m "Fase 0: estructura, motor y paquete de excepciones básicas"

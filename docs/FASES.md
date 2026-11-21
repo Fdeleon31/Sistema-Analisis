@@ -11,7 +11,7 @@ archivo y `CHANGELOG.md`, crea la etiqueta `fase-N` y haz push (ver `GIT.md`).
 - [x] Ciclo de estrés: 8 de 8 variantes de exportación y 9 de 9 casos borde (34 pruebas)
 - [ ] Pruebas pasan en tu computador (python -m pytest)
 - [ ] Layouts de 3 exportaciones reales (solo encabezados y formatos, sin datos de clientes)
-- [ ] Feriados 2025 verificados contra el calendario oficial
+- [x] Feriados 2025 verificados (solo feriados nacionales; los días no hábiles bancarios como el lunes de Carnaval quedan fuera)
 - [ ] Contrato revisado (cláusulas de propiedad intelectual, confidencialidad, conflicto de interés)
 - [ ] Dos semanas de registro de tiempos y dolores con IDEA
 - [ ] Cinco entrevistas con auditores de otras firmas

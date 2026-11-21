@@ -35,7 +35,7 @@ descuadrado y sobre la materialidad de ejecución.
 Requiere Python 3.11 o superior.
 
 ```powershell
-cd $HOME\OneDrive\Desktop\cuadra
+cd "$HOME\OneDrive\Desktop\Sistema Analisis"
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt

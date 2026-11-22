@@ -315,3 +315,160 @@ def generar_facturas_fe(carpeta: str | Path, semilla: int = 21) -> tuple[Path, P
     ruta_mayor = carpeta / "mayor_ventas_2025.csv"
     pd.DataFrame(filas, columns=["asiento", "linea", "fecha", "cuenta", "descripcion", "monto", "usuario"]).to_csv(ruta_mayor, index=False)
     return ruta_zip, ruta_mayor
+
+
+# --- Fase 2 · Estado de cuenta bancario en PDF y mayor de bancos (Ficha 13) ------------
+
+SEMBRADOS_BANCOS = {
+    "saldo_inicial": 50000.00,
+    "salto_saldo_indice": 10,
+    "salto_saldo_ajuste": 100.00,
+    "cargo_duplicado": 185.50,
+    "cargo_no_contabilizado": 45.00,
+    "cheque_devuelto": 310.00,
+    "interes_enero_2026": 420.00,
+    "deposito_transito": 3850.00,
+    "cheque_pendiente": 1420.00,
+}
+
+
+def generar_estado_cuenta_bancos(carpeta: str | Path, semilla: int = 33) -> tuple[Path, Path]:
+    """Genera extracto bancario en PDF real y mayor de bancos 2025 con anomalías sembradas.
+
+    Devuelve (extracto_pdf, mayor_bancos_csv).
+    """
+    import pandas as pd
+    from conectores.estado_cuenta_pdf import generar_pdf_estado_cuenta
+
+    rnd = random.Random(semilla)
+    carpeta = Path(carpeta)
+    carpeta.mkdir(parents=True, exist_ok=True)
+    dias = _dias_base_2025()
+    reservados = {185.50, 45.00, 310.00, 420.00, 3850.00, 1420.00}
+
+    eventos: list[dict] = []
+    for k in range(44):
+        fecha = dias[min(len(dias) - 1, int(k * len(dias) / 44))]
+        while True:
+            val = round(rnd.uniform(80.0, 4800.0), 2)
+            if val not in reservados:
+                break
+        es_deposito = k % 2 == 0
+        ref = f"DEP-{1000 + k}" if es_deposito else f"ACH-{2000 + k}"
+        desc = f"Depósito cliente {ref}" if es_deposito else f"Pago proveedor {ref}"
+        eventos.append({
+            "fecha": fecha,
+            "referencia": ref,
+            "descripcion": desc,
+            "monto": val if es_deposito else -val,
+            "en_extracto": True,
+            "en_mayor": True,
+        })
+
+    # Anomalías sembradas explícitas
+    eventos.append({
+        "fecha": date(2025, 6, 15),
+        "referencia": "ND-601",
+        "descripcion": "Comisión transferencia internacional",
+        "monto": -SEMBRADOS_BANCOS["cargo_duplicado"],
+        "en_extracto": True,
+        "en_mayor": True,
+    })
+    eventos.append({
+        "fecha": date(2025, 6, 15),
+        "referencia": "ND-601",
+        "descripcion": "Comisión transferencia internacional",
+        "monto": -SEMBRADOS_BANCOS["cargo_duplicado"],
+        "en_extracto": True,
+        "en_mayor": False,  # duplicado en extracto sin respaldo contable
+    })
+    eventos.append({
+        "fecha": date(2025, 11, 30),
+        "referencia": "ND-901",
+        "descripcion": "Cargo mensual mantenimiento cuenta",
+        "monto": -SEMBRADOS_BANCOS["cargo_no_contabilizado"],
+        "en_extracto": True,
+        "en_mayor": False,
+    })
+    eventos.append({
+        "fecha": date(2025, 12, 18),
+        "referencia": "ND-955",
+        "descripcion": "Cargo cheque devuelto cliente",
+        "monto": -SEMBRADOS_BANCOS["cheque_devuelto"],
+        "en_extracto": True,
+        "en_mayor": False,
+    })
+    eventos.append({
+        "fecha": date(2026, 1, 4),
+        "referencia": "NC-002",
+        "descripcion": "Crédito intereses enero 2026",
+        "monto": SEMBRADOS_BANCOS["interes_enero_2026"],
+        "en_extracto": True,
+        "en_mayor": False,
+    })
+    eventos.append({
+        "fecha": date(2025, 12, 30),
+        "referencia": "DEP-9901",
+        "descripcion": "Depósito en tránsito fin de año",
+        "monto": SEMBRADOS_BANCOS["deposito_transito"],
+        "en_extracto": False,
+        "en_mayor": True,
+    })
+    eventos.append({
+        "fecha": date(2025, 12, 31),
+        "referencia": "CHQ-8802",
+        "descripcion": "Cheque pendiente de cobro proveedor",
+        "monto": -SEMBRADOS_BANCOS["cheque_pendiente"],
+        "en_extracto": False,
+        "en_mayor": True,
+    })
+
+    eventos.sort(key=lambda e: (e["fecha"], e["referencia"]))
+
+    saldo = float(SEMBRADOS_BANCOS["saldo_inicial"])
+    filas_pdf: list[dict] = []
+    idx_ext = 0
+    for ev in eventos:
+        if not ev["en_extracto"]:
+            continue
+        idx_ext += 1
+        m = float(ev["monto"])
+        saldo = round(saldo + m, 2)
+        if idx_ext == SEMBRADOS_BANCOS["salto_saldo_indice"]:
+            saldo = round(saldo + SEMBRADOS_BANCOS["salto_saldo_ajuste"], 2)
+        filas_pdf.append({
+            "fecha": ev["fecha"].isoformat(),
+            "referencia": ev["referencia"],
+            "descripcion": ev["descripcion"],
+            "debito": round(abs(m), 2) if m < 0 else 0.0,
+            "credito": round(m, 2) if m > 0 else 0.0,
+            "saldo": saldo,
+        })
+
+    ruta_pdf = carpeta / "extracto_banco_2025.pdf"
+    encabezado_pdf = [
+        "BANCO GENERAL, S.A. - PANAMA",
+        "Estado de Cuenta Corriente Empresarial (Sintético)",
+        "Cuenta: 03-45-01-123456-7   Moneda: USD   Periodo: 2025-01-01 a 2025-12-31",
+        f"Saldo Inicial: {SEMBRADOS_BANCOS['saldo_inicial']:,.2f}",
+    ]
+    generar_pdf_estado_cuenta(ruta_pdf, encabezado_pdf, filas_pdf)
+
+    filas_mayor: list[list] = []
+    asiento = 1
+    for ev in eventos:
+        if not ev["en_mayor"]:
+            continue
+        m = round(float(ev["monto"]), 2)
+        contra = "1201" if m > 0 else "5101"
+        f_iso = ev["fecha"].isoformat()
+        filas_mayor.append([asiento, 1, f_iso, "1101", f"{ev['referencia']} {ev['descripcion']}", m, "maria.rios"])
+        filas_mayor.append([asiento, 2, f_iso, contra, f"{ev['referencia']} {ev['descripcion']}", -m, "maria.rios"])
+        asiento += 1
+
+    ruta_mayor = carpeta / "mayor_bancos_2025.csv"
+    pd.DataFrame(
+        filas_mayor,
+        columns=["asiento", "linea", "fecha", "cuenta", "descripcion", "monto", "usuario"],
+    ).to_csv(ruta_mayor, index=False)
+    return ruta_pdf, ruta_mayor

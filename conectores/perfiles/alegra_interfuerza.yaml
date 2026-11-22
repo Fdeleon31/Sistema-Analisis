@@ -1,0 +1,27 @@
+id: alegra-interfuerza
+nombre: Alegra e InterFuerza (Cloud Panamá)
+segmento_panama: PYMES y emprendedores con facturación electrónica PAC y planilla local
+motor_origen: SaaS Cloud Panamá (Exportación Libro Diario / Movimientos)
+formatos_frecuentes: [xlsx, csv, jsonl]
+orden_ui: 9
+descripcion: >
+  Plataformas en la nube ampliamente adoptadas en Panamá por cumplimiento DGI/PAC.
+  Los exportes de libro diario con frecuencia omiten número de línea y ocasionalmente usuario.
+aliases:
+  asiento: [Comprobante, Número, No. Asiento, Transacción, Asiento]
+  linea: [Línea, Linea, Secuencia, Renglón]
+  fecha: [Fecha, Fecha de creación, Fecha contable]
+  cuenta: [Código cuenta, Cuenta Contable, Cuenta, Código]
+  descripcion: [Observaciones, Detalle, Descripción, Concepto, Notas]
+  monto: [Monto, Valor, Neto]
+  usuario: [Usuario, Creado por, Elaborado por]
+debito_credito_pares:
+  - [Débito, Crédito]
+  - [Debito, Credito]
+  - [Debe, Haber]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: true
+usuario_defecto_si_falta: "(sin usuario en origen)"
+consultas_sql: []

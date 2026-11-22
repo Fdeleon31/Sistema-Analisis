@@ -1,0 +1,41 @@
+id: dynamics
+nombre: Microsoft Dynamics (GP y Business Central)
+segmento_panama: Empresas medianas, financieras y corporativos Microsoft
+motor_origen: SQL Server Dynamics GP (GL20000) / D365 Business Central (Table 17 G/L Entry)
+formatos_frecuentes: [SQL Server, xlsx, csv, duckdb]
+orden_ui: 7
+descripcion: >
+  Cubre tablas abiertas/históricas de Dynamics GP (GL20000/GL30000) y exportaciones estándar
+  de movimientos de contabilidad de Dynamics 365 Business Central (G/L Entry).
+aliases:
+  asiento: [JRNENTRY, Document No., Journal Entry, No. documento]
+  linea: [SEQNUMBR, Entry No., Mov. nº, Line No.]
+  fecha: [TRXDATE, Posting Date, Fecha registro]
+  cuenta: [ACTNUMST, ACTINDX, G/L Account No., Nº cuenta]
+  descripcion: [REFRENCE, DSCRIPTN, Description, Descripción]
+  monto: [Amount, Importe]
+  usuario: [USWHPSTD, User ID, Id. usuario]
+debito_credito_pares:
+  - [DEBITAMT, CRDTAMNT]
+  - [Debit Amount, Credit Amount]
+  - [Importe debe, Importe haber]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: false
+usuario_defecto_si_falta: null
+consultas_sql:
+  - titulo: Microsoft Dynamics GP (SQL Server) · Año abierto GL20000
+    sql: |
+      SELECT
+          g.JRNENTRY AS asiento,
+          g.SEQNUMBR AS linea,
+          CAST(g.TRXDATE AS DATE) AS fecha,
+          COALESCE(a.ACTNUMST, CAST(g.ACTINDX AS VARCHAR(20))) AS cuenta,
+          COALESCE(NULLIF(g.REFRENCE, ''), g.DSCRIPTN, '') AS descripcion,
+          COALESCE(g.DEBITAMT, 0) - COALESCE(g.CRDTAMNT, 0) AS monto,
+          COALESCE(g.USWHPSTD, '') AS usuario
+      FROM dbo.GL20000 g
+      LEFT JOIN dbo.GL00105 a ON a.ACTINDX = g.ACTINDX
+      WHERE g.TRXDATE >= '2025-01-01' AND g.TRXDATE <= '2025-12-31'
+      ORDER BY g.TRXDATE, g.JRNENTRY, g.SEQNUMBR

@@ -1,0 +1,12 @@
+{
+  "paquete": "bancos-conciliacion",
+  "semilla": 33,
+  "nota": "Valores calculados por diseño sobre motor/sintetico.py generar_estado_cuenta_bancos()",
+  "resultados": {
+    "bancos-continuidad": 1,
+    "bancos-duplicados": 1,
+    "bancos-fuera-periodo": 1,
+    "bancos-no-en-mayor": 4,
+    "bancos-no-en-extracto": 2
+  }
+}

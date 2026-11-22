@@ -1,0 +1,27 @@
+id: monica-saint
+nombre: Mónica y Saint
+segmento_panama: Comercios minoristas, ferreterías y pequeñas empresas locales
+motor_origen: Mónica / Saint Enterprise (Exportación Excel / CSV / TXT Windows-1252)
+formatos_frecuentes: [xlsx, csv, txt (cp1252)]
+orden_ui: 10
+descripcion: >
+  Software tradicional comercial en Panamá. Exporta comúnmente en Windows-1252 (cp1252)
+  con fechas DD/MM/YYYY, columnas Debe/Haber y sin número de línea ni usuario en reportes básicos.
+aliases:
+  asiento: [Nro. Asiento, No. Comprobante, Comprobante, Asiento, Documento]
+  linea: [Renglón, Renglon, Línea, Item]
+  fecha: [Fecha, Fec. Asiento]
+  cuenta: [Cod. Cuenta, Código de Cuenta, Cuenta]
+  descripcion: [Concepto, Glosa, Detalle, Descripción]
+  monto: [Monto, Importe]
+  usuario: [Usuario, Operador]
+debito_credito_pares:
+  - [Debe, Haber]
+  - [Débito, Crédito]
+  - [Debito, Credito]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: true
+usuario_defecto_si_falta: "(sin usuario en origen)"
+consultas_sql: []

@@ -1,6 +1,7 @@
 """Sugerencias de mapeo, servicio único e interfaz (prueba de humo)."""
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from archivos_realistas import ENCABEZADOS_ES
@@ -41,6 +42,7 @@ def test_servicio_corre_el_paquete_y_deja_cedula(tmp_path):
     corrida = ejecutar_encargo("asientos-nia240", {"mayor": mayor, "balanza": balanza}, encargo, tmp_path / "s")
     r = {x.id: x for x in corrida.resultados}
     assert r["asientos-criterios"].excepciones == 11 and corrida.cedula.exists() and corrida.bitacora.verificar()
+    assert "asientos-puntaje" in pd.ExcelFile(corrida.cedula).sheet_names
 
 
 def test_interfaz_abre_sin_errores():
@@ -49,9 +51,31 @@ def test_interfaz_abre_sin_errores():
 
     app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app" / "inicio.py"), default_timeout=60).run()
     assert not app.exception
-    assert app.title[0].value == "Cuadra"
+    etiquetas = {b.label for b in app.button}
+    assert {
+        "Asientos NIA 240",
+        "Excepciones básicas",
+        "Factura DGI",
+        "Bancos PDF",
+        "Muestreo MUS",
+        "Conectores ERP / SQL",
+        "Copiloto SQL",
+        "Bitácora y Cédula",
+        "Encargos y Firmas",
+    } <= etiquetas
     boton = [b for b in app.button if b.label == "Correr pruebas"][0]
     assert boton.disabled  # sin archivos no se puede correr
+
+
+def test_interfaz_navega_barra_herramientas():
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app" / "inicio.py"), default_timeout=60).run()
+    for nombre in ("Bancos PDF", "Muestreo MUS", "Conectores ERP / SQL", "Copiloto SQL", "Bitácora y Cédula", "Encargos y Firmas", "Excepciones básicas"):
+        [b for b in app.button if b.label == nombre][0].click().run()
+        assert not app.exception
+    assert any(b.label == "Correr pruebas" for b in app.button)
 
 
 def test_detecta_fila_de_encabezado_bajo_titulos():

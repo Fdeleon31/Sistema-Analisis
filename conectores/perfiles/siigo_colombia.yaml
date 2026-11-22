@@ -1,0 +1,26 @@
+id: siigo-colombia
+nombre: Siigo Nube / Pyme (Colombia)
+segmento_panama: Operación regional Colombia y filiales Latam (NIIF / Auxiliar contable Siigo)
+motor_origen: Siigo Nube Colombia (Movimiento / Auxiliar Contable Excel-CSV)
+formatos_frecuentes: [xlsx, csv]
+orden_ui: 11
+descripcion: >
+  Exportación estándar de libro auxiliar y comprobantes contables de Siigo Colombia.
+  Utiliza encabezados en español colombiano (Fecha elaboración, Código cuenta contable, Débito, Crédito).
+aliases:
+  asiento: [Comprobante contable, Número comprobante, Doc. Contable]
+  linea: [Secuencia movimiento, Núm. Línea, Secuencia]
+  fecha: [Fecha elaboración, Fecha de elaboración, Fecha doc.]
+  cuenta: [Código cuenta contable, Cuenta contable Siigo]
+  descripcion: [Descripción movimiento, Descripción del movimiento]
+  monto: [Valor neto movimiento]
+  usuario: [Usuario creación, Usuario elaboró]
+debito_credito_pares:
+  - [Débito, Crédito]
+  - [Debito, Credito]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: true
+usuario_defecto_si_falta: "(sin usuario en origen)"
+consultas_sql: []

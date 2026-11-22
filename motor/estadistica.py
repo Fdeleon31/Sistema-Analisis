@@ -31,11 +31,16 @@ def rango_digitos(digitos: int) -> range:
 
 
 def z_estadistico(real: float, esperada: float, n: int) -> float:
+    if n <= 0 or not (0.0 < esperada < 1.0):
+        return 0.0
     diferencia = abs(real - esperada)
     correccion = 1 / (2 * n)
     if correccion < diferencia:
         diferencia -= correccion
-    return diferencia / math.sqrt(esperada * (1 - esperada) / n)
+    varianza = esperada * (1 - esperada) / n
+    if varianza <= 0.0:
+        return 0.0
+    return diferencia / math.sqrt(varianza)
 
 
 def conformidad(mad: float, digitos: int) -> str:

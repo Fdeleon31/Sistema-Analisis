@@ -73,3 +73,40 @@ def test_linea_en_blanco_se_excluye_y_se_reporta(tmp_path):
     ruta = _csv(tmp_path, "b.csv", "1,1,2025-01-02,5101,G,10.00,a\n,,,,,,\n2,1,2025-01-03,5101,G,20.00,a\n")
     control = importar(duckdb.connect(), ruta, "m")
     assert (control["filas"], control["filas_excluidas"]) == (2, 1)
+
+
+def test_vista_previa_y_codificacion_rapida_en_archivo_grande(tmp_path):
+    from motor.importador import _leer_excel_grande_a_duckdb, detectar_codificacion
+
+    # 1. Detección por prefijo sin cortar multibyte UTF-8 y detección de cp1252 en bloques
+    ruta_utf8 = tmp_path / "largo_utf8.csv"
+    encabezado = H.encode("utf-8")
+    fila_utf8 = "1,1,2025-01-02,5101,Operación aérea y camión,10.00,a\n".encode("utf-8")
+    ruta_utf8.write_bytes(encabezado + fila_utf8 * 6000)
+    assert detectar_codificacion(ruta_utf8, max_bytes=262144) == "utf-8"
+
+    ruta_cp1252 = tmp_path / "largo_cp1252.csv"
+    fila_cp = "1,1,2025-01-02,5101,Camión de carga,10.00,a\n".encode("cp1252")
+    ruta_cp1252.write_bytes(encabezado + fila_cp * 200)
+    assert detectar_codificacion(ruta_cp1252, max_bytes=262144) == "cp1252"
+
+    con = duckdb.connect()
+    ctrl_cp = importar(con, ruta_cp1252, "m_cp")
+    assert ctrl_cp["filas"] == 200 and ctrl_cp["codificacion"] == "cp1252"
+
+    # 2. Lectura streaming de Excel en openpyxl read_only=True
+    df = pd.DataFrame({
+        "asiento": [1, 1],
+        "linea": [1, 2],
+        "fecha": [datetime(2025, 1, 2)] * 2,
+        "cuenta": ["5101", "1101"],
+        "descripcion": ["Gasto", "Banco"],
+        "monto": [100.0, -100.0],
+        "usuario": ["ana", "ana"],
+    })
+    ruta_xlsx = tmp_path / "grande.xlsx"
+    df.to_excel(ruta_xlsx, index=False)
+    ctrl_xls = {"transformaciones": []}
+    _leer_excel_grande_a_duckdb(con, ruta_xlsx, "m_xls", None, None, ctrl_xls)
+    assert con.execute("SELECT COUNT(*) FROM m_xls").fetchone()[0] == 2
+    assert any("streaming" in t for t in ctrl_xls["transformaciones"])

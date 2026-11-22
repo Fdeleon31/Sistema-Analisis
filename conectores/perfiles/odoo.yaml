@@ -1,0 +1,44 @@
+id: odoo
+nombre: Odoo (account.move.line)
+segmento_panama: PYMES modernas, distribuidoras y comercio electrónico con módulos PAC
+motor_origen: PostgreSQL (account_move, account_move_line, account_account, res_users)
+formatos_frecuentes: [PostgreSQL, xlsx, csv, parquet]
+orden_ui: 6
+descripcion: >
+  Exportaciones de apuntes contables (account.move.line) en nombres técnicos o traducidos al español,
+  y extracción directa desde PostgreSQL.
+aliases:
+  asiento: [move_id/name, move_name, Asiento contable, Journal Entry, move_id, Número]
+  linea: [sequence, id, Línea]
+  fecha: [date, Fecha, Date]
+  cuenta: [account_id/code, account_code, Cuenta, Account, account_id]
+  descripcion: [name, Etiqueta, Label, ref, Referencia]
+  monto: [balance, Saldo, amount_currency]
+  usuario: [create_uid, create_uid/name, Creado por, Created by, login]
+debito_credito_pares:
+  - [debit, credit]
+  - [Debe, Haber]
+  - [Debit, Credit]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: true
+usuario_defecto_si_falta: "(sin usuario en origen)"
+consultas_sql:
+  - titulo: Odoo (PostgreSQL) · Apuntes contables asentados
+    sql: |
+      SELECT
+          m.name AS asiento,
+          ROW_NUMBER() OVER (PARTITION BY aml.move_id ORDER BY aml.sequence, aml.id) AS linea,
+          aml.date AS fecha,
+          aa.code AS cuenta,
+          COALESCE(NULLIF(aml.name, ''), m.ref, '') AS descripcion,
+          COALESCE(aml.debit, 0) - COALESCE(aml.credit, 0) AS monto,
+          COALESCE(u.login, 'sistema') AS usuario
+      FROM account_move_line aml
+      INNER JOIN account_move m ON m.id = aml.move_id
+      INNER JOIN account_account aa ON aa.id = aml.account_id
+      LEFT JOIN res_users u ON u.id = aml.create_uid
+      WHERE m.state = 'posted'
+        AND aml.date BETWEEN '2025-01-01' AND '2025-12-31'
+      ORDER BY aml.date, m.name, linea

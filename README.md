@@ -1,7 +1,7 @@
-# Cuadra
+# Folio Auditor · Mesa de Auditoría Determinista
 
-Herramienta de analítica de auditoría con IA para firmas latinoamericanas.
-Proyecto personal, en desarrollo por fases. **Estado: Fase 2 en curso (0.5.0): asientos de diario, muestreo, interfaz y factura electrónica de la DGI.**
+Herramienta de analítica y documentación determinista de auditoría para firmas latinoamericanas (100 % local, sin conexión a internet).
+**Estado: Fase 3 (`0.8.0`): flujo NIA 220/230 (`Preparador → Revisor → Socio`), portafolio de encargos, semáforo previo de integridad contable, constancia ejecutiva en tiempo real (cliente, período auditado y hora local/UTC), cédulas Excel ejecutivas y binario portátil `.exe` para Windows.**
 
 > Repositorio privado. Nunca subas datos de clientes: solo datos sintéticos.
 
@@ -24,8 +24,9 @@ Importa un mayor general (CSV o Excel), guarda su huella SHA-256, corre el paque
 | Paquete | Archivos | Qué entrega |
 | --- | --- | --- |
 | `excepciones-basicas` | mayor | Benford, duplicados, gaps en asientos y fechas |
-| `asientos-nia240` | mayor y balanza (opcional), más el archivo del encargo | Mayor contra balanza, estratificación, rubros, asientos con criterios de riesgo, selección sugerida y muestra impredecible |
+| `asientos-nia240` | mayor y balanza (opcional), más el archivo del encargo | Mayor contra balanza, estratificación, rubros, asientos con criterios de riesgo, puntaje de riesgo explicable (Ficha 11), selección sugerida y muestra impredecible |
 | `ventas-fe` | ZIP o carpeta de XML de factura electrónica y mayor (opcional) | Consistencia de totales, CUFE repetido, huecos de numeración, fuera de periodo, ambiente de pruebas y conciliación mensual de ventas |
+| `bancos-conciliacion` | Estado de cuenta bancario en PDF (o CSV/Excel) y mayor (opcional) | Extracción local sin internet, continuidad aritmética de saldos, duplicados, movimientos fuera de periodo y conciliación 1 a 1 contra la cuenta de bancos (partidas en tránsito y cargos no registrados) |
 
 Los diez criterios por asiento: fin de semana o feriado, posterior al cierre, cerca del cierre, monto redondo,
 justo bajo el umbral de aprobación, descripción vacía o genérica, usuario poco frecuente, cuenta poco usada,
@@ -45,11 +46,15 @@ pip install -r requirements.txt
 Si PowerShell bloquea la activación, corre una vez
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` o usa `.venv\Scripts\activate.bat` desde CMD.
 
-## Uso sin consola (recomendado para auditores)
+## Uso sin consola (programa nativo de escritorio, 100 % sin internet)
 
-Doble clic en **`iniciar.bat`**. La primera vez prepara todo (tarda unos minutos); después abre
-Cuadra en el navegador. Ahí llenas los datos del encargo, subes el diario y la balanza, confirmas
-las columnas que Cuadra sugiere y descargas la cédula. Los archivos se procesan solo en tu computador.
+Doble clic en **`iniciar.bat`** (o ejecuta `python cuadra.py escritorio`). Una vez instalado el entorno `.venv`, abre directamente la **aplicación nativa de escritorio para Windows (PySide6 / Qt 6)** con Cinta de Opciones estilo Excel:
+
+- Corre **100 % sin conexión a internet** (iconografía 3D local, bitácora SHA-256 y motor DuckDB en el equipo).
+- Lee archivos pesados directamente desde disco sin copiarlos ni subirlos por red.
+- Incluye portafolio de encargos guardados (`.yaml`), historial de corridas y flujo de revisión/firma por roles (`Preparador -> Revisor -> Socio`).
+- Para generar un ejecutable portátil `.exe` en Windows (sin requerir Python en otros equipos), ejecuta **`empaquetar_exe.bat`** (salida en `dist\LibroAuditoria\LibroAuditoria.exe`).
+- Si prefieres la interfaz local en navegador (Streamlit), ejecuta `iniciar.bat web`.
 
 ## Uso por consola
 
@@ -88,12 +93,35 @@ python cuadra.py correr --paquete asientos-nia240 --encargo encargos\mi-encargo.
   --archivo mayor=datos\diario.xlsx --archivo balanza=datos\balanza.csv --hoja Diario --debito-credito "Debe,Haber"
 ```
 
-### Factura electrónica de la DGI
+### Factura electrónica de la DGI y Bancos PDF
 
 ```powershell
 python cuadra.py ejemplo-fe
+python cuadra.py ejemplo-bancos
+python cuadra.py copiloto --pregunta "Asientos descuadrados" --aprobar
 python cuadra.py correr --paquete ventas-fe --encargo encargos\mi-encargo.yaml `
   --archivo facturas=datos\facturas_2025.zip --archivo mayor=datos\diario.xlsx
+python cuadra.py correr --paquete bancos-conciliacion --encargo encargos\mi-encargo.yaml `
+  --archivo extracto=datos\estado_cuenta.pdf --archivo mayor=datos\diario.xlsx
+```
+
+### Sistemas contables de Panamá y fuentes SQL/datos
+
+Cuadra adapta su importador y perfiles de mapeo a los 10 sistemas contables/ERP más usados en Panamá
+(`sap-ecc-s4`, `sap-b1`, `softland-exactus`, `sage50-peachtree`, `quickbooks`, `odoo`, `dynamics`,
+`netsuite`, `alegra-interfuerza`, `monica-saint`) e ingesta `.csv`, `.tsv`, `.txt` (SAP ALV `|`,
+UTF-16/UTF-8/cp1252), `.xlsx`, `.parquet`, `.json`/`.jsonl`, `.sqlite`, `.duckdb`, volcados `.sql`
+y conexiones SQL de solo lectura (`SELECT`/`WITH`).
+
+```powershell
+# Ver catálogo de perfiles ERP y formatos soportados
+python cuadra.py conectores
+python cuadra.py conectores --erp sap-b1
+
+# Importar un reporte ALV de SAP o un archivo SQLite/Parquet con autodetección
+python cuadra.py correr --archivo datos\fbl3n_alv.txt --erp auto
+python cuadra.py correr --archivo datos\diario.sqlite --tabla-origen mayor --erp auto
+python cuadra.py correr --archivo datos\odoo_apuntes.parquet --erp odoo --generar-linea
 ```
 
 ### Muestreo
@@ -119,6 +147,26 @@ Cada prueba compara el motor contra resultados calculados a mano en
 `paquetes/excepciones-basicas/casos/esperados.json`. Ninguna función se da por
 lograda si sus casos no pasan.
 
+## Ciberseguridad, Login y Verificación
+
+- **Control de acceso dual (Escritorio y Web):** asistente inicial y pantalla de inicio de sesión diferenciada para **Administrador** (gestión de cuentas, políticas NIA 220/230 y bitácora de accesos) y **Preparador / Auditor** (`Preparador`, `Revisor`, `Socio`). Para pruebas locales sin prompt puedes usar `python cuadra.py escritorio --sin-login`.
+- **Verificación criptográfica y bóveda en reposo:**
+
+```powershell
+# Verificar firma Ed25519 (sello.json), hashes de cédula/revisiones y cadena SHA-256
+python cuadra.py verificar salidas\20261122-100000
+
+# Postura de entorno (nube/OneDrive, web 127.0.0.1), escaneo SAST y SBOM CycloneDX
+python cuadra.py seguridad --entorno --escanear --sbom docs\seguridad\sbom.cdx.json
+
+# Cifrar y descifrar una corrida en bóveda AES-256-GCM (Windows DPAPI o FOLIO_BOVEDA_PASS)
+python cuadra.py seguridad --cifrar salidas\20261122-100000 --dpapi
+python cuadra.py seguridad --descifrar salidas\20261122-100000
+
+# Puerta completa DevSecOps (escaneo + todas las suites de seguridad + SBOM + lockfile)
+.\verificar_seguridad.ps1
+```
+
 ## Estructura
 
 ```
@@ -143,6 +191,7 @@ Para agregar un paquete nuevo basta con crear su carpeta en `paquetes/` con un
 ## Documentación
 
 - [docs/FASES.md](docs/FASES.md): fases, puertas y estado.
+- [docs/ESTUDIO_MERCADO_PANAMA.md](docs/ESTUDIO_MERCADO_PANAMA.md): análisis de sistemas contables en Panamá y adaptaciones.
 - [docs/SALA_LIMPIA.md](docs/SALA_LIMPIA.md): reglas de desarrollo independiente.
 - [docs/GIT.md](docs/GIT.md): flujo de trabajo con git por consola.
 - [CHANGELOG.md](CHANGELOG.md): cambios por versión.

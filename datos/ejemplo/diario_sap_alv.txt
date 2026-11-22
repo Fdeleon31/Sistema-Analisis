@@ -1,0 +1,14 @@
+------------------------------------------------------------------------------------------
+|BELNR     |BUZEI|BUDAT   |HKONT |SGTXT                              |DMBTR       |SHKZG|USNAM     |
+------------------------------------------------------------------------------------------
+|1         |1    |20250102|5202  |Alquiler de oficina                |    3,934.05|S    |ana.gomez |
+|1         |2    |20250102|1101  |Alquiler de oficina                |    3,934.05|H    |ana.gomez |
+|2         |1    |20250102|5101  |Compra de mercancía                |    1,558.99|S    |ana.gomez |
+|2         |2    |20250102|1101  |Compra de mercancía                |    1,558.99|H    |ana.gomez |
+|3         |1    |20250102|5204  |Mantenimiento                      |      314.30|S    |jose.vega |
+|3         |2    |20250102|1101  |Mantenimiento                      |      314.30|H    |jose.vega |
+|4         |1    |20250102|5101  |Compra de mercancía                |      166.11|S    |ana.gomez |
+|4         |2    |20250102|1101  |Compra de mercancía                |      166.11|H    |ana.gomez |
+|5         |1    |20250102|1501  |Compra de equipo                   |    1,411.41|S    |ana.gomez |
+|5         |2    |20250102|1101  |Compra de equipo                   |    1,411.41|H    |ana.gomez |
+------------------------------------------------------------------------------------------

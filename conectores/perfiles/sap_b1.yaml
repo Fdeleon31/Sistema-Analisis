@@ -1,0 +1,44 @@
+id: sap-b1
+nombre: SAP Business One
+segmento_panama: Mediana y gran empresa, importadoras y Zona Libre de Colón
+motor_origen: Microsoft SQL Server / SAP HANA (OJDT, JDT1)
+formatos_frecuentes: [SQL Server, xlsx, csv]
+orden_ui: 2
+descripcion: >
+  Diario general de SAP Business One desde tablas OJDT (encabezado) y JDT1 (líneas).
+  Prioriza Debit/Credit en moneda local sobre FCDebit/FCCredit.
+aliases:
+  asiento: [TransId, Number, Numero de asiento, Asiento, Transacción]
+  linea: [Line_ID, LineId, Línea, VisOrder]
+  fecha: [RefDate, TaxDate, Posting Date, Fecha de contabilización, Fecha]
+  cuenta: [Account, ShortName, Cuenta, Código de cuenta]
+  descripcion: [LineMemo, Memo, Comentarios, Descripción]
+  monto: [SysDeb, BalDueDeb]
+  usuario: [U_NAME, UserSign, USER_CODE, Usuario]
+debito_credito_pares:
+  - [Debit, Credit]
+  - [Débito, Crédito]
+  - [Debito, Credito]
+  - [SYSDeb, SYSCred]
+  - [FCDebit, FCCredit]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: false
+usuario_defecto_si_falta: null
+consultas_sql:
+  - titulo: SAP Business One (SQL Server) · Diario OJDT + JDT1
+    sql: |
+      SELECT
+          h.TransId AS asiento,
+          l.Line_ID + 1 AS linea,
+          CAST(h.RefDate AS DATE) AS fecha,
+          l.Account AS cuenta,
+          COALESCE(NULLIF(l.LineMemo, ''), h.Memo, '') AS descripcion,
+          COALESCE(l.Debit, 0) - COALESCE(l.Credit, 0) AS monto,
+          COALESCE(u.USER_CODE, CAST(h.UserSign AS VARCHAR(20))) AS usuario
+      FROM OJDT h
+      INNER JOIN JDT1 l ON l.TransId = h.TransId
+      LEFT JOIN OUSR u ON u.USERID = h.UserSign
+      WHERE h.RefDate >= '2025-01-01' AND h.RefDate <= '2025-12-31'
+      ORDER BY h.TransId, l.Line_ID

@@ -1,0 +1,26 @@
+id: softland-cr-latam
+nombre: Softland Centroamérica / Costa Rica (Multi-moneda)
+segmento_panama: Grupos corporativos Costa Rica y Centroamérica (Contabilidad General multi-moneda)
+motor_origen: Softland ERP Centroamérica (Contabilidad General SQL / Excel)
+formatos_frecuentes: [xlsx, csv, sqlite]
+orden_ui: 13
+descripcion: >
+  Exportación regional centroamericana de asientos de Contabilidad General con columnas
+  de monto local (colones/dólares) y numeración consecutiva de línea.
+aliases:
+  asiento: [Numero_Asiento, Num_Asiento_CR, Comprobante_CR]
+  linea: [Linea_Asiento, Consecutivo_CR]
+  fecha: [Fecha_Asiento, Fecha_Contable_CR]
+  cuenta: [Cuenta_Local, Cuenta_Contable_CR]
+  descripcion: [Detalle_Movimiento, Glosa_Asiento]
+  monto: [Monto_Local]
+  usuario: [Usuario_Registro, Usuario_CR]
+debito_credito_pares:
+  - [Monto_Debito_Local, Monto_Credito_Local]
+  - [Debito_Colones, Credito_Colones]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: true
+usuario_defecto_si_falta: "(sin usuario en origen)"
+consultas_sql: []

@@ -1,10 +1,10 @@
 id: asientos-nia240
 nombre: Pruebas de asientos de diario (NIA 240)
-version: 0.1.0
+version: 0.2.0
 descripcion: >
   Integridad del mayor contra la balanza, estratificación, sumarización por rubro,
-  criterios de riesgo por asiento, selección sugerida y muestra impredecible.
-  Especificado en las fichas 04, 06, 07 y 09 del cuaderno de sala limpia.
+  criterios y puntaje explicable de riesgo por asiento, selección sugerida y muestra impredecible.
+  Especificado en las fichas 04, 06, 07, 09 y 11 del cuaderno de sala limpia.
 
 archivos:
   - tabla: mayor
@@ -93,6 +93,21 @@ pruebas:
     identificadores: *mayor
     parametros: *criterios
     posproceso: criterios
+
+  - id: asientos-puntaje
+    nombre: Puntaje de riesgo explicable por asiento
+    ficha: "11"
+    nia: [NIA 240, NIA 330]
+    sql: pruebas/asientos_criterios.sql
+    identificadores: *mayor
+    parametros:
+      <<: *criterios
+      pesos: {descuadrado: 20, sobre_materialidad: 15, posterior_cierre: 12, bajo_umbral: 10, fin_semana_feriado: 8,
+              cerca_cierre: 8, descripcion_sospechosa: 8, usuario_poco_frecuente: 8, cuenta_poco_usada: 6, monto_redondo: 5}
+      pesos_encargo: encargo.pesos_riesgo|{}
+      nivel_alto: encargo.nivel_riesgo_alto|25
+      nivel_medio: encargo.nivel_riesgo_medio|15
+    posproceso: puntaje
 
   - id: asientos-seleccion
     nombre: Selección sugerida de asientos para probar

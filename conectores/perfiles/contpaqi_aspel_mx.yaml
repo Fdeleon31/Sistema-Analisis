@@ -1,0 +1,26 @@
+id: contpaqi-aspel-mx
+nombre: CONTPAQi Contabilidad / Aspel COI (México)
+segmento_panama: Filiales y grupos regionales en México (Pólizas contables Cargos / Abonos)
+motor_origen: CONTPAQi / Aspel COI (Exportación de Pólizas XML/Excel/CSV)
+formatos_frecuentes: [xlsx, csv, txt]
+orden_ui: 12
+descripcion: >
+  Esquema contable tradicional de México (CONTPAQi y Aspel COI) estructurado por número de póliza,
+  movimiento, cuenta contable segmentada y columnas de Cargos y Abonos.
+aliases:
+  asiento: [Póliza, Poliza, No. Póliza, Num. Poliza]
+  linea: [No. Mov, Mov, Num. Movimiento]
+  fecha: [Fecha Póliza, Fecha Poliza, Fecha del Movimiento]
+  cuenta: [Código Cuenta CONTPAQi, Cuenta Contable MX, Cuenta Contable]
+  descripcion: [Concepto Movimiento, Concepto de la Póliza, Concepto Póliza]
+  monto: [Importe Movimiento, Importe Neto]
+  usuario: [Usuario Elabora, Usuario Póliza]
+debito_credito_pares:
+  - [Cargos, Abonos]
+  - [Cargo, Abono]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: true
+usuario_defecto_si_falta: "(sin usuario en origen)"
+consultas_sql: []

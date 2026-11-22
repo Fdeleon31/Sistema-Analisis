@@ -18,6 +18,8 @@ datos/clientes/
 # Secretos y configuración local
 .env
 *.key
+seguridad/
+*.folioenc
 
 # Sistema y editores
 .DS_Store
@@ -26,4 +28,7 @@ Thumbs.db
 .idea/
 ~$*.xlsx
 datos/ejemplo/*.zip
+datos/ejemplo/*.pdf
 datos/ejemplo/facturas_xml/
+build/
+dist/

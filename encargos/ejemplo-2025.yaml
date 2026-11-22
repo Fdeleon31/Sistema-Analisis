@@ -16,5 +16,8 @@ tamano_muestra_impredecible: 5
 semilla: 2025
 prefijo_ingresos: '4'
 # mapeo_cuentas: mapeo_cuentas.csv   # opcional: cuenta,rubro; reemplaza la regla por prefijo
+# pesos_riesgo: {monto_redondo: 10}  # opcional: reemplaza pesos de la Ficha 11
+# nivel_riesgo_alto: 25
+# nivel_riesgo_medio: 15
 preparo: ""
 reviso: ""

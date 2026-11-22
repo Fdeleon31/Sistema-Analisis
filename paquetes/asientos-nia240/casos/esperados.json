@@ -64,7 +64,22 @@
       ]
     ],
     "lineas": 2400,
-    "tamano_muestra_impredecible": 5
+    "tamano_muestra_impredecible": 5,
+    "puntaje": {
+      "1111": [29, "alto"],
+      "707": [20, "medio"],
+      "1001": [15, "medio"],
+      "909": [10, "bajo"],
+      "101": [8, "bajo"],
+      "202": [8, "bajo"],
+      "404": [8, "bajo"],
+      "606": [8, "bajo"],
+      "808": [8, "bajo"],
+      "505": [6, "bajo"],
+      "303": [5, "bajo"]
+    },
+    "puntaje_primeros": ["1111", "707", "1001", "909"],
+    "puntaje_por_nivel": {"alto": 1, "medio": 2, "bajo": 8}
   },
   "dataset_2_erp": {
     "descripcion": "Mismo diseño con otra semilla (11), exportado como ERP: Excel con portada, Debe y Haber, fechas dd/mm/aaaa, asientos JE-000000, encabezados en español; balanza en Windows-1252 con título, miles y fila de total",

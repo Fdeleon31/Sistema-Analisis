@@ -1,0 +1,70 @@
+id: bancos-conciliacion
+nombre: Conciliación bancaria y estados de cuenta PDF
+version: 0.1.0
+descripcion: >
+  Lee estados de cuenta bancarios en PDF (o CSV/Excel), valida continuidad aritmética
+  de saldos corridos, movimientos duplicados o fuera de periodo, y concilia 1 a 1
+  contra la cuenta de bancos del mayor general (partidas en tránsito y cargos no contabilizados). Ficha 13.
+
+archivos:
+  - tabla: extracto
+    tipo: estado_cuenta_bancario
+    descripcion: Estado de cuenta bancario en PDF (archivo, carpeta o ZIP) o tabular CSV/Excel
+  - tabla: mayor
+    opcional: true
+    descripcion: Mayor general (para conciliar contra la cuenta contable de bancos)
+    columnas_requeridas: [asiento, linea, fecha, cuenta, descripcion, monto, usuario]
+    columnas_monto: [monto]
+    columnas_fecha: [fecha]
+    claves: [fecha, asiento]
+
+pruebas:
+  - id: bancos-continuidad
+    nombre: Descuadres en continuidad de saldo del extracto
+    ficha: "13"
+    nia: [NIA 500]
+    sql: pruebas/bancos_continuidad_saldos.sql
+    identificadores: {extracto: extracto}
+
+  - id: bancos-duplicados
+    nombre: Movimientos duplicados en el extracto bancario
+    ficha: "13"
+    nia: [NIA 500, NIA 240]
+    sql: pruebas/bancos_duplicados.sql
+    identificadores: {extracto: extracto}
+
+  - id: bancos-fuera-periodo
+    nombre: Movimientos del extracto fuera del periodo auditado
+    ficha: "13"
+    nia: [NIA 500]
+    sql: pruebas/bancos_fuera_periodo.sql
+    identificadores: {extracto: extracto}
+    parametros:
+      periodo_inicio: encargo.periodo_inicio
+      fecha_cierre: encargo.fecha_cierre
+
+  - id: bancos-no-en-mayor
+    nombre: Cargos/abonos del banco no registrados en el mayor
+    ficha: "13"
+    nia: [NIA 500, NIA 330]
+    requiere: [mayor]
+    sql: pruebas/bancos_conciliacion_mayor.sql
+    identificadores: {extracto: extracto, mayor: mayor, asiento: asiento, linea: linea, fecha: fecha, cuenta: cuenta, descripcion: descripcion, monto: monto}
+    parametros:
+      cuenta_banco: encargo.cuenta_banco|'1101'
+      ventana_dias: encargo.ventana_conciliacion|5
+      devolver: origen
+    posproceso: conciliacion_1a1
+
+  - id: bancos-no-en-extracto
+    nombre: Partidas del mayor no reflejadas en el extracto (en tránsito)
+    ficha: "13"
+    nia: [NIA 500, NIA 330]
+    requiere: [mayor]
+    sql: pruebas/bancos_conciliacion_mayor.sql
+    identificadores: {extracto: extracto, mayor: mayor, asiento: asiento, linea: linea, fecha: fecha, cuenta: cuenta, descripcion: descripcion, monto: monto}
+    parametros:
+      cuenta_banco: encargo.cuenta_banco|'1101'
+      ventana_dias: encargo.ventana_conciliacion|5
+      devolver: contraparte
+    posproceso: conciliacion_1a1

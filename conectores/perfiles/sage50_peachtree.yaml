@@ -1,0 +1,28 @@
+id: sage50-peachtree
+nombre: Sage 50 / Peachtree
+segmento_panama: PYMES tradicionales y despachos contables en Panamá
+motor_origen: Sage 50 Accounting (General Ledger / General Journal export)
+formatos_frecuentes: [csv, xlsx]
+orden_ui: 4
+descripcion: >
+  Estándar histórico de escritorio en PYMES panameñas. Los reportes de Mayor/Diario suelen venir
+  con fechas MM/DD/YY o MM/DD/YYYY y omiten número de línea y usuario en exportaciones básicas.
+aliases:
+  asiento: [Reference, Trans No, Journal Reference, Ref, Jrnl Ref, Transaction No]
+  linea: [Line No, Line, Sequence]
+  fecha: [Date, Trans Date, Jrnl Date]
+  cuenta: [Account ID, General Ledger ID, GL Account, Account No]
+  descripcion: [Description, Trans Description, Line Description, Memo]
+  monto: [Amount, Net Amount]
+  usuario: [User, User ID, Entered By]
+debito_credito_pares:
+  - [Debit Amt, Credit Amt]
+  - [Debit Amount, Credit Amount]
+  - [Debit, Credit]
+  - [Débito, Crédito]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: true
+usuario_defecto_si_falta: "(sin usuario en origen)"
+consultas_sql: []

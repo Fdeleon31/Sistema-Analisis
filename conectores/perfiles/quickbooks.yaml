@@ -1,0 +1,26 @@
+id: quickbooks
+nombre: QuickBooks (Desktop y Online)
+segmento_panama: PYMES de servicios, comercio exterior y profesionales independientes
+motor_origen: Intuit QuickBooks (Journal / General Ledger CSV o Excel)
+formatos_frecuentes: [csv, xlsx]
+orden_ui: 5
+descripcion: >
+  Reportes Journal y Transaction Detail de QuickBooks Desktop y QuickBooks Online.
+  Normalmente exporta sin columna consecutiva de línea.
+aliases:
+  asiento: [DOCNUM, Num, No., "Trans #", Transaction ID, Journal No.]
+  linea: [Line, Line No, Row]
+  fecha: [DATE, Date, Trans Date]
+  cuenta: [ACCNT, Account, Split, Account No., Account full name]
+  descripcion: [MEMO, Memo/Description, Memo, Description]
+  monto: [AMOUNT, Amount]
+  usuario: [CREATED BY, User, Last Modified By, Name]
+debito_credito_pares:
+  - [DEBIT, CREDIT]
+  - [Debit, Credit]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: true
+usuario_defecto_si_falta: "(sin usuario en origen)"
+consultas_sql: []

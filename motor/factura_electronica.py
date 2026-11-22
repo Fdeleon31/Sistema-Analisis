@@ -8,12 +8,20 @@ from __future__ import annotations
 
 import hashlib
 import io
-import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pandas as pd
+
+from .seguridad import (
+    MAX_ARCHIVOS_ZIP,
+    MAX_BYTES_XML,
+    MAX_BYTES_ZIP_TOTAL,
+    ErrorSeguridad,
+    leer_miembros_zip_seguros,
+    validar_xml_seguro,
+)
 
 TIPOS_DOCUMENTO = {
     "01": "Factura de operación interna",
@@ -69,6 +77,7 @@ def _numero(valor: str | None) -> float | None:
 
 
 def leer_xml(contenido: bytes, nombre: str) -> dict:
+    validar_xml_seguro(contenido)
     raiz = ET.fromstring(contenido)
     rfe = raiz if _local(raiz.tag) == "rFE" else _primero(raiz, "rFE")
     if rfe is None:
@@ -102,15 +111,26 @@ def _fuentes(ruta: Path):
     if ruta.is_dir():
         for p in sorted(ruta.rglob("*")):
             if p.suffix.lower() == ".xml":
+                if p.stat().st_size > MAX_BYTES_XML:
+                    raise ErrorSeguridad(
+                        f"El archivo XML {p.name!r} excede el tamaño máximo permitido ({MAX_BYTES_XML:,} bytes)."
+                    )
                 yield str(p.relative_to(ruta)), p.read_bytes()
             elif p.suffix.lower() == ".zip":
                 yield from _fuentes(p)
     elif ruta.suffix.lower() == ".zip":
-        with zipfile.ZipFile(ruta) as z:
-            for nombre in sorted(z.namelist()):
-                if nombre.lower().endswith(".xml"):
-                    yield nombre, z.read(nombre)
+        yield from leer_miembros_zip_seguros(
+            ruta,
+            extensiones=(".xml",),
+            max_archivos=MAX_ARCHIVOS_ZIP,
+            max_bytes_archivo=MAX_BYTES_XML,
+            max_bytes_total=MAX_BYTES_ZIP_TOTAL,
+        )
     elif ruta.suffix.lower() == ".xml":
+        if ruta.stat().st_size > MAX_BYTES_XML:
+            raise ErrorSeguridad(
+                f"El archivo XML {ruta.name!r} excede el tamaño máximo permitido ({MAX_BYTES_XML:,} bytes)."
+            )
         yield ruta.name, ruta.read_bytes()
     else:
         raise ValueError(f"Usa una carpeta, un ZIP o un XML: {ruta.name}")

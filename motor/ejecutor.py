@@ -17,11 +17,26 @@ from .importador import validar_identificador
 from .muestreo import muestra_aleatoria
 
 PARAMETRO = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
-POSPROCESOS = {"benford", "criterios", "seleccion", "aleatoria", "informativo", "conciliacion"}
+POSPROCESOS = {
+    "benford", "criterios", "puntaje", "seleccion", "aleatoria",
+    "informativo", "conciliacion", "conciliacion_1a1",
+}
 CRITERIOS_ASIENTO = [
     "fin_semana_feriado", "posterior_cierre", "cerca_cierre", "monto_redondo", "bajo_umbral",
     "descripcion_sospechosa", "usuario_poco_frecuente", "cuenta_poco_usada", "descuadrado", "sobre_materialidad",
 ]
+NOMBRES_CRITERIOS = {
+    "fin_semana_feriado": "Fin de semana o feriado",
+    "posterior_cierre": "Posterior al cierre",
+    "cerca_cierre": "Cerca del cierre",
+    "monto_redondo": "Monto redondo",
+    "bajo_umbral": "Justo bajo el umbral de aprobación",
+    "descripcion_sospechosa": "Descripción vacía o genérica",
+    "usuario_poco_frecuente": "Usuario poco frecuente",
+    "cuenta_poco_usada": "Cuenta poco usada",
+    "descuadrado": "Asiento descuadrado",
+    "sobre_materialidad": "Sobre materialidad de ejecución",
+}
 
 
 @dataclass
@@ -88,6 +103,146 @@ def _identificadores(valores: dict) -> dict[str, str]:
     return salida
 
 
+def _numero_compacto(valor: float) -> int | float:
+    return int(valor) if float(valor).is_integer() else round(float(valor), 2)
+
+
+def _aplicar_posproceso_puntaje(tabla: pd.DataFrame, parametros: dict) -> tuple[pd.DataFrame, dict]:
+    """Calcula el puntaje de riesgo explicable por asiento (Ficha 11)."""
+    pesos_encargo = parametros.get("pesos_encargo") or {}
+    if not isinstance(pesos_encargo, dict):
+        raise ValueError("pesos_riesgo debe ser un diccionario {criterio: peso}.")
+    pesos_brutos = {**parametros["pesos"], **pesos_encargo}
+
+    invalidos = [k for k in pesos_brutos if k not in CRITERIOS_ASIENTO]
+    if invalidos:
+        raise ValueError(
+            f"Criterio(s) de riesgo inválido(s): {', '.join(invalidos)}. "
+            f"Válidos: {', '.join(CRITERIOS_ASIENTO)}"
+        )
+    for k, v in pesos_brutos.items():
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or float(v) < 0:
+            raise ValueError(f"El peso del criterio {k!r} debe ser un número mayor o igual a 0 (recibido: {v!r}).")
+
+    alto = float(parametros["nivel_alto"])
+    medio = float(parametros["nivel_medio"])
+    if medio < 0 or alto < 0 or medio > alto:
+        raise ValueError(
+            f"Umbrales de riesgo inválidos: nivel_riesgo_medio ({medio}) no puede superar a nivel_riesgo_alto ({alto})."
+        )
+
+    todos_enteros = all(float(v).is_integer() for v in pesos_brutos.values())
+    pesos = {k: (int(v) if todos_enteros else round(float(v), 2)) for k, v in pesos_brutos.items()}
+
+    presentes = [c for c in CRITERIOS_ASIENTO if c in tabla.columns]
+    asientos_analizados = len(tabla)
+
+    salida = tabla.copy()
+    puntaje_serie = pd.Series(0.0, index=salida.index)
+    for c in presentes:
+        puntaje_serie = puntaje_serie + salida[c].astype(bool).astype(int) * float(pesos.get(c, 0))
+    puntaje_serie = puntaje_serie.round(2)
+    salida["puntaje"] = puntaje_serie.astype(int) if todos_enteros else puntaje_serie
+
+    def _nivel(p: float) -> str:
+        if p >= alto:
+            return "alto"
+        if p >= medio:
+            return "medio"
+        if p > 0:
+            return "bajo"
+        return ""
+
+    def _explicar(fila: pd.Series) -> str:
+        marcados = [c for c in presentes if bool(fila[c])]
+        ordenados = sorted(marcados, key=lambda c: -float(pesos.get(c, 0)))
+        partes = []
+        for c in ordenados:
+            w = pesos.get(c, 0)
+            w_txt = str(int(w)) if float(w).is_integer() else f"{float(w):g}"
+            partes.append(f"{NOMBRES_CRITERIOS.get(c, c)} (+{w_txt})")
+        return "; ".join(partes)
+
+    salida["nivel"] = salida["puntaje"].map(_nivel)
+    salida = salida[salida["puntaje"] > 0].copy()
+    salida["explicacion"] = [_explicar(fila) for _, fila in salida.iterrows()]
+    salida = salida.sort_values(by=["puntaje", "total_debito", "asiento"], ascending=[False, False, True]).reset_index(drop=True)
+
+    prioridad = ["asiento", "fecha", "usuario", "descripcion", "total_debito", "puntaje", "nivel", "explicacion"]
+    columnas = [c for c in prioridad if c in salida.columns] + [c for c in salida.columns if c not in prioridad]
+    salida = salida[columnas]
+
+    por_nivel = {
+        "alto": int((salida["nivel"] == "alto").sum()),
+        "medio": int((salida["nivel"] == "medio").sum()),
+        "bajo": int((salida["nivel"] == "bajo").sum()),
+    }
+    puntaje_maximo = sum(pesos.values()) if todos_enteros else round(sum(float(v) for v in pesos.values()), 2)
+    resumen = {
+        "excepciones": len(salida),
+        "por_nivel": por_nivel,
+        "pesos": pesos,
+        "puntaje_maximo": puntaje_maximo,
+        "umbrales": {"alto": _numero_compacto(alto), "medio": _numero_compacto(medio)},
+        "asientos_analizados": asientos_analizados,
+    }
+    return salida, resumen
+
+
+def _aplicar_posproceso_conciliacion_1a1(tabla: pd.DataFrame, parametros: dict) -> tuple[pd.DataFrame, dict]:
+    """Emparejamiento determinista 1 a 1 por monto y proximidad temporal (Ficha 13)."""
+    ventana = int(parametros.get("ventana_dias", 5))
+    devolver = str(parametros.get("devolver", "origen"))
+    if tabla.empty:
+        return tabla.drop(columns=["_lado"], errors="ignore"), {"excepciones": 0, "emparejados": 0, "ventana_dias": ventana}
+
+    origen = tabla[tabla["_lado"] == "origen"].reset_index(drop=True)
+    contra = tabla[tabla["_lado"] == "contraparte"].reset_index(drop=True)
+    fechas_o = pd.to_datetime(origen["fecha"]).dt.date
+    fechas_c = pd.to_datetime(contra["fecha"]).dt.date
+    montos_o = pd.to_numeric(origen["monto"]).round(2)
+    montos_c = pd.to_numeric(contra["monto"]).round(2)
+
+    candidatos: list[tuple[int, int, int, int]] = []
+    por_monto_c: dict[float, list[int]] = {}
+    for j, m_c in enumerate(montos_c):
+        por_monto_c.setdefault(float(m_c), []).append(j)
+
+    for i, m_o in enumerate(montos_o):
+        f_o = fechas_o.iloc[i]
+        ref_o = str(origen["referencia"].iloc[i] or "").strip().upper()
+        for j in por_monto_c.get(float(m_o), []):
+            diff = abs((f_o - fechas_c.iloc[j]).days)
+            if diff <= ventana:
+                desc_c = str(contra["descripcion"].iloc[j] or "").upper()
+                penal_ref = 0 if (ref_o and ref_o in desc_c) else 1
+                candidatos.append((diff, penal_ref, i, j))
+
+    candidatos.sort()
+    usados_o: set[int] = set()
+    usados_c: set[int] = set()
+    for _, _, i, j in candidatos:
+        if i not in usados_o and j not in usados_c:
+            usados_o.add(i)
+            usados_c.add(j)
+
+    if devolver == "contraparte":
+        libres = contra.loc[~contra.index.isin(usados_c)].copy()
+        cols = [c for c in ["asiento", "linea", "fecha", "cuenta", "descripcion", "monto"] if c in libres.columns]
+    else:
+        libres = origen.loc[~origen.index.isin(usados_o)].copy()
+        cols = [c for c in ["archivo", "banco", "cuenta_bancaria", "linea", "fecha", "referencia", "descripcion", "monto"] if c in libres.columns]
+
+    salida = libres[cols].sort_values(by=[c for c in ("fecha", "linea") if c in cols]).reset_index(drop=True)
+    resumen = {
+        "excepciones": len(salida),
+        "emparejados": len(usados_o),
+        "ventana_dias": ventana,
+        "monto_no_conciliado": round(float(salida["monto"].sum()), 2) if not salida.empty else 0.0,
+    }
+    return salida, resumen
+
+
 def _tablas_existentes(con) -> set[str]:
     return {r[0] for r in con.execute("SELECT table_name FROM information_schema.tables").fetchall()}
 
@@ -133,6 +288,8 @@ def correr_prueba(
         resumen["asientos_analizados"] = len(tabla)
         tabla = tabla[tabla["criterios"] > 0].reset_index(drop=True)
         resumen["excepciones"] = len(tabla)
+    elif posproceso == "puntaje":
+        tabla, resumen = _aplicar_posproceso_puntaje(tabla, parametros_prueba)
     elif posproceso == "seleccion":
         minimo = int(parametros_prueba.get("minimo_criterios", 2))
         regla = (tabla["criterios"] >= minimo) | tabla["descuadrado"] | tabla["sobre_materialidad"]
@@ -154,6 +311,8 @@ def correr_prueba(
         resumen["excepciones"] = len(diferencias)
         resumen["diferencia_total"] = round(float(tabla["diferencia"].sum()), 2)
         resumen["periodos"] = len(tabla)
+    elif posproceso == "conciliacion_1a1":
+        tabla, resumen = _aplicar_posproceso_conciliacion_1a1(tabla, parametros_prueba)
     elif posproceso is not None:
         raise ValueError(f"Posproceso desconocido: {posproceso}. Válidos: {sorted(POSPROCESOS)}")
     else:

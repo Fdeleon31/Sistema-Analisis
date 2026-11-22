@@ -1,0 +1,43 @@
+id: softland-exactus
+nombre: Softland ERP / Exactus
+segmento_panama: Mediana empresa y corporativo local (con localización DGI/CSS)
+motor_origen: Microsoft SQL Server (DIARIO / ASIENTO_DE_DIARIO, CUENTA_CONTABLE)
+formatos_frecuentes: [SQL Server, xlsx, csv]
+orden_ui: 3
+descripcion: >
+  Líder regional con localización panameña (DGI, ITBMS, planilla CSS).
+  Soporta montos locales y en dólares (DEBITO_LOCAL/CREDITO_LOCAL y DEBITO_DOLAR/CREDITO_DOLAR).
+aliases:
+  asiento: [ASIENTO, NUMERO_COMPROBANTE, Comprobante, No. Asiento]
+  linea: [CONSECUTIVO, LINEA, Linea, Secuencia]
+  fecha: [FECHA, FECHA_ASIENTO, Fecha]
+  cuenta: [CUENTA_CONTABLE, CODIGO_CUENTA, Cuenta Contable]
+  descripcion: [REFERENCIA, CONCEPTO, GLOSA, NOTAS, Descripción]
+  monto: [MONTO, MONTO_LOCAL, MONTO_DOLAR]
+  usuario: [USUARIO, USUARIO_CREACION, USUARIO_ULT_MOD, Usuario]
+debito_credito_pares:
+  - [DEBITO_LOCAL, CREDITO_LOCAL]
+  - [DEBITO_DOLAR, CREDITO_DOLAR]
+  - [DEBITO, CREDITO]
+  - [Débito, Crédito]
+  - [Debe, Haber]
+indicador_dc: null
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: false
+usuario_defecto_si_falta: null
+consultas_sql:
+  - titulo: Softland / Exactus (SQL Server) · Tabla DIARIO
+    sql: |
+      SELECT
+          d.ASIENTO AS asiento,
+          d.CONSECUTIVO AS linea,
+          CAST(d.FECHA AS DATE) AS fecha,
+          d.CUENTA_CONTABLE AS cuenta,
+          COALESCE(d.REFERENCIA, d.CONCEPTO, '') AS descripcion,
+          COALESCE(d.DEBITO_LOCAL, 0) - COALESCE(d.CREDITO_LOCAL, 0) AS monto,
+          COALESCE(d.USUARIO, '(sin usuario)') AS usuario
+      FROM dbo.DIARIO d
+      INNER JOIN dbo.CUENTA_CONTABLE c ON c.CUENTA_CONTABLE = d.CUENTA_CONTABLE
+      WHERE d.FECHA >= '2025-01-01' AND d.FECHA <= '2025-12-31'
+      ORDER BY d.FECHA, d.ASIENTO, d.CONSECUTIVO

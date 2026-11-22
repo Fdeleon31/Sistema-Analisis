@@ -1,0 +1,56 @@
+id: sap-ecc-s4
+nombre: SAP S/4HANA y ECC (FI-GL / FBL3N)
+segmento_panama: Corporativo, multinacionales (SEM), banca y logística
+motor_origen: SAP HANA / ABAP (BKPF, BSEG, ACDOCA, FBL3N, FAGLL03)
+formatos_frecuentes: [txt (ALV |), xlsx, csv, utf-16]
+orden_ui: 1
+descripcion: >
+  Exportaciones de diario y partidas de mayor de SAP ECC y S/4HANA (FBL3N, FAGLL03, SE16N),
+  incluyendo reportes ALV delimitados por barra vertical (|), indicador Debe/Haber (SHKZG S/H)
+  y signo negativo al final (1,500.00-).
+aliases:
+  asiento: [BELNR, Documento contable, Doc. contable, No. Documento, Accounting Document, Document Number]
+  linea: [BUZEI, DOCLN, Posición, Pos., Line Item, Pos]
+  fecha: [BUDAT, Fecha contabilización, Fe.contabilización, Posting Date, Fecha contab.]
+  cuenta: [HKONT, RACCT, Cuenta mayor, Cuenta de mayor, G/L Account, Cta.mayor]
+  descripcion: [SGTXT, BKTXT, Texto posición, Texto, Texto cab.doc., Item Text]
+  monto: [DMBTR, HSL, WRBTR, WSL, Importe ML, Importe en ML, Importe, Amount in Local Cur.]
+  usuario: [USNAM, Nombre del usuario, Usuario, User Name]
+debito_credito_pares: []
+indicador_dc:
+  columnas: [SHKZG, DRCRK, D/C, Ind. D/H, Ind.Debe/Haber]
+  valores_credito: [H, C, CR, HABER, CREDITO]
+separador_decimal: "."
+formato_fecha: null
+generar_linea_si_falta: false
+usuario_defecto_si_falta: null
+consultas_sql:
+  - titulo: SAP S/4HANA · Universal Journal (ACDOCA)
+    sql: |
+      SELECT
+          BELNR AS asiento,
+          DOCLN AS linea,
+          BUDAT AS fecha,
+          RACCT AS cuenta,
+          SGTXT AS descripcion,
+          CASE WHEN DRCRK = 'H' THEN -ABS(HSL) ELSE ABS(HSL) END AS monto,
+          USNAM AS usuario
+      FROM ACDOCA
+      WHERE RBUKRS = '1000'
+        AND GJAHR = '2025'
+        AND BSTAT = ''
+  - titulo: SAP ECC · Encabezado y Partidas (BKPF + BSEG)
+    sql: |
+      SELECT
+          h.BELNR AS asiento,
+          p.BUZEI AS linea,
+          h.BUDAT AS fecha,
+          p.HKONT AS cuenta,
+          COALESCE(NULLIF(p.SGTXT, ''), h.BKTXT) AS descripcion,
+          CASE WHEN p.SHKZG = 'H' THEN -ABS(p.DMBTR) ELSE ABS(p.DMBTR) END AS monto,
+          h.USNAM AS usuario
+      FROM BKPF h
+      INNER JOIN BSEG p
+        ON p.BUKRS = h.BUKRS AND p.BELNR = h.BELNR AND p.GJAHR = h.GJAHR
+      WHERE h.BUKRS = '1000'
+        AND h.GJAHR = '2025'

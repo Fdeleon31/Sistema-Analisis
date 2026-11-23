@@ -16,6 +16,7 @@ import ctypes.wintypes as wt
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import sys
 from datetime import datetime, timezone
@@ -410,7 +411,29 @@ def _preparar_info_gcm(
     return info
 
 
+def _gcm_portable(clave_32b: bytes, datos: bytes, nonce: bytes, tag: bytes, aad: bytes, cifrar: bool) -> tuple[bytes, bytes]:
+    """AES-256-GCM con la librería auditada `cryptography` (respaldo fuera de Windows; mismo formato que CNG)."""
+    try:
+        from cryptography.exceptions import InvalidTag
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    except ImportError as exc:
+        raise ErrorSeguridad(
+            "AES-256-GCM vía Windows CNG requiere sistema operativo Windows "
+            "(fuera de Windows instala el paquete 'cryptography')."
+        ) from exc
+    gcm = AESGCM(clave_32b)
+    if cifrar:
+        salida = gcm.encrypt(nonce, datos, aad or None)
+        return salida[:-_AES_GCM_TAG_BYTES], salida[-_AES_GCM_TAG_BYTES:]
+    try:
+        return gcm.decrypt(nonce, datos + tag, aad or None), tag
+    except InvalidTag as exc:
+        raise ErrorSeguridad("Autenticación AES-256-GCM fallida: datos, clave, nonce o AAD alterados.") from exc
+
+
 def _ejecutar_cng_gcm(clave_32b: bytes, datos: bytes, nonce: bytes, tag: bytes, aad: bytes, cifrar: bool) -> tuple[bytes, bytes]:
+    if os.name != "nt":
+        return _gcm_portable(clave_32b, datos, nonce, tag, aad, cifrar)
     bcrypt = _obtener_bcrypt()
     h_alg = ctypes.c_void_p()
     h_key = ctypes.c_void_p()

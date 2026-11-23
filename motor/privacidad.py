@@ -315,10 +315,12 @@ def descifrar_carpeta_corrida(
 
 def detectar_carpeta_sincronizada(ruta: str | Path) -> dict[str, Any]:
     """Detecta si una ruta está ubicada dentro de un proveedor de sincronización en la nube."""
-    ruta_obj = Path(ruta)
     proveedor_detectado: str | None = None
 
-    for parte in ruta_obj.parts:
+    # Separar por / y \ explícitamente: Path() solo entiende el separador del sistema actual,
+    # y una ruta de Windows (C:\Users\...\OneDrive) analizada en macOS/Linux quedaba como una sola parte.
+    partes = [p for p in re.split(r"[\\/]+", str(ruta)) if p]
+    for parte in partes:
         limpia = parte.strip().lower()
         if not limpia:
             continue

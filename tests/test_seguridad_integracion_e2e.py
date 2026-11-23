@@ -149,7 +149,19 @@ def test_cli_cuadra_verificar_y_seguridad_completo(tmp_path, monkeypatch):
         corrida.bitacora,
     )
 
+    # Sin registro de claves no se puede afirmar quién firmó: íntegro pero firmante sin verificar (código 2)
+    monkeypatch.setattr(cuadra, "RAIZ", tmp_path / "sin_usuarios")
+    assert cuadra.main(["verificar", str(sal)]) == 2
+    # Con el registro local de la firma (seguridad/usuarios.json) el firmante queda verificado
+    monkeypatch.setattr(cuadra, "RAIZ", tmp_path)
     assert cuadra.main(["verificar", str(sal)]) == 0
+    # Registro exportado para el auditor externo
+    claves_path = tmp_path / "claves_firma.json"
+    assert cuadra.main(["seguridad", "--exportar-claves", str(claves_path)]) == 0
+    monkeypatch.setattr(cuadra, "RAIZ", tmp_path / "sin_usuarios")
+    assert cuadra.main(["verificar", str(sal), "--claves", str(claves_path)]) == 0
+    assert "contrasena_hash" not in claves_path.read_text(encoding="utf-8")
+    monkeypatch.setattr(cuadra, "RAIZ", tmp_path)
     assert cuadra.main(["seguridad", "--escanear"]) == 0
     assert cuadra.main(["seguridad", "--entorno"]) == 0
 
@@ -164,7 +176,9 @@ def test_cli_cuadra_verificar_y_seguridad_completo(tmp_path, monkeypatch):
     assert diag["integridad_bitacora_sha256"] is True
     assert "Empresa" not in diag_path.read_text(encoding="utf-8")
 
-    # Bóveda DPAPI con borrado de origen y restauración
+    # Bóveda DPAPI con borrado de origen y restauración (DPAPI existe solo en Windows)
+    if os.name != "nt":
+        return
     carp_dpapi = tmp_path / "boveda_dpapi"
     carp_dpapi.mkdir()
     doc_a = carp_dpapi / "papel.txt"

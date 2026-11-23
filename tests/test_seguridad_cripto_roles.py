@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -151,6 +152,7 @@ def test_aes_gcm_ida_vuelta_y_deteccion_de_alteracion():
         descifrar_aes_gcm(b"\x25" * 32, paquete, aad=aad)
 
 
+@pytest.mark.skipif(os.name != "nt", reason="DPAPI (crypt32.dll) solo existe en Windows")
 def test_dpapi_y_clave_privada_cifrada():
     secreto = b"semilla-local-sintetica-dpapi-2026"
     protegido = proteger_dpapi(secreto)

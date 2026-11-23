@@ -1,5 +1,34 @@
 # Cambios
 
+## 0.9.1 · Seguridad verificable y archivos reales de clientes (noviembre 2026)
+
+Salió de usar el sistema como auditor con exportaciones realistas (sintéticas) y de una revisión
+de seguridad con pruebas de ataque. 234 pruebas pasan también fuera de Windows (antes fallaban 21).
+
+- **Sello anclado** (`motor/cripto.py`): `verificar` compara la clave del sello con el registro de
+  claves de la firma (`seguridad/usuarios.json` o `--claves` exportado con `seguridad --exportar-claves`).
+  Antes, una carpeta alterada y re-sellada con una clave inventada a nombre del Socio daba "VÁLIDO";
+  ahora se rechaza, y sin registro se informa "ÍNTEGRO, FIRMANTE SIN VERIFICAR" (código 2).
+- **Sello versión 2**: cubre todos los archivos de la carpeta (antes solo 3; una muestra MUS se podía
+  cambiar) y rechaza archivos agregados después del sellado. La interfaz regeneraba la cédula
+  después de sellar y el sello quedaba "alterado" al instante; ahora se regenera antes.
+- **usuarios.json firmado por el Administrador**: perfiles, roles, claves públicas y políticas no se
+  pueden editar a mano (se bloquea el login); la clave privada debe corresponder a la pública
+  registrada. Los archivos de 0.9.0 se firman en el primer ingreso de un Administrador.
+- **Login**: scrypt N=2^17 (OWASP) con migración automática, mismo tiempo de respuesta con usuarios
+  inexistentes, y `FOLIO_OMITIR_LOGIN_WEB` / `--sin-login` dejan de funcionar con el control de acceso activo.
+- **Cadena de suministro**: `requirements.lock` con 1,120 hashes SHA-256 e `iniciar.bat` instala con
+  `--require-hashes`; pip 25.0.1 → 26.3 (pip-audit: sin vulnerabilidades conocidas).
+- **AES-256-GCM portable** con la librería `cryptography` fuera de Windows (en Windows sigue CNG).
+- **`.gitignore`**: la regla `seguridad/` también ocultaba `docs/seguridad/`; ahora es `/seguridad/`.
+- **Estados de cuenta PDF reales**: los PDF con fuentes incrustadas se leían como basura y daban
+  0 movimientos sin error; ahora se usa QtPdf, la dirección débito/crédito sale del saldo corrido y un
+  PDF sin movimientos detiene la lectura con un mensaje claro.
+- **QuickBooks y Sage**: relleno hacia abajo de fecha y asiento en reportes agrupados (antes se perdían
+  las líneas de detalle), detección automática de filas de título y `Name` ya no se toma como usuario.
+- **Fechas**: `01/15/2025` ya no se declara ambigua en archivos pequeños con una fila TOTAL.
+- Las pruebas ya no escriben en `salidas/` (`FOLIO_SALIDAS`). `SECURITY.md` trae el modelo de amenazas.
+
 ## 0.9.0 · Ciberseguridad Integral y Control de Acceso Dual (noviembre 2026)
 
 - **Gobierno, modelo de amenazas y marcos (Oleada 0, Ficha 19):**

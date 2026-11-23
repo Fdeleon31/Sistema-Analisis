@@ -107,7 +107,7 @@ def correr(paquete: str, archivos: dict[str, Path | str], encargo_ruta: Path | N
     corrida = ejecutar_encargo(paquete, archivos, encargo, salida,
                                opciones={principal: {"mapeo": mapeo, **opciones}}, separador_decimal=decimal)
 
-    print(f"\nCuadra {__version__} · paquete {manifiesto['id']} {manifiesto['version']}")
+    print(f"\nFolio Auditor {__version__} · paquete {manifiesto['id']} {manifiesto['version']}")
     if encargo.get("cliente"):
         print(f"Encargo: {encargo['cliente']} · cierre {encargo.get('fecha_cierre')}")
     for control in corrida.controles:

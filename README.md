@@ -1,7 +1,7 @@
 # Folio Auditor · Mesa de Auditoría Determinista
 
 Herramienta de analítica y documentación determinista de auditoría para firmas latinoamericanas (100 % local, sin conexión a internet).
-**Estado: Fase 3 (`0.8.0`): flujo NIA 220/230 (`Preparador → Revisor → Socio`), portafolio de encargos, semáforo previo de integridad contable, constancia ejecutiva en tiempo real (cliente, período auditado y hora local/UTC), cédulas Excel ejecutivas y binario portátil `.exe` para Windows.**
+**Estado: Fase 3 (`0.9.1`): flujo NIA 220/230 (`Preparador → Revisor → Socio`), portafolio de encargos, semáforo previo de integridad contable, constancia ejecutiva en tiempo real (cliente, período auditado y hora local/UTC), cédulas Excel ejecutivas y binario portátil `.exe` para Windows.**
 
 > Repositorio privado. Nunca subas datos de clientes: solo datos sintéticos.
 

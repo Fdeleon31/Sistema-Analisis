@@ -2,7 +2,7 @@
 
 Mesa de analítica y documentación determinista de auditoría para firmas latinoamericanas (Panamá primero).
 Proyecto personal de Felipe, desarrollado fuera de su empleo bajo reglas de sala limpia.
-Estado actual: **Fase 3 (`0.8.0` · `Folio Auditor`)**, programa nativo de escritorio (`.exe` sin internet), interfaz Web secundaria, confiabilidad contable (Ficha 16) e identidad ejecutiva con constancia en tiempo real (Ficha 17).
+Estado actual: **Fase 3 (`0.9.1` · `Folio Auditor`)**, programa nativo de escritorio (`.exe` sin internet), interfaz Web secundaria, confiabilidad contable (Ficha 16) e identidad ejecutiva con constancia en tiempo real (Ficha 17).
 Responde y documenta siempre en **español**.
 
 ## Reglas que no se rompen
@@ -60,5 +60,4 @@ python cuadra.py escritorio --autoprueba
 
 1. Piloto con exportaciones reales anonimizadas (encabezados/PDF de clientes de firma, agregando variantes sintéticas en `tests/archivos_realistas.py`).
 2. Confirmar el feriado del 10 de noviembre de 2025 (fuente oficial en `feriados_pa.csv`).
-3. Instalar `git` en Windows, inicializar `.git` y configurar repositorio privado en GitHub para `git push` (ver `docs/GIT.md`).
-4. Firma digital de código del instalador Windows para despliegue en red corporativa.
+3. Firma digital de código del instalador Windows para despliegue en red corporativa.

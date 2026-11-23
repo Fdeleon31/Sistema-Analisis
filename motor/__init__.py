@@ -1,3 +1,3 @@
-"""Motor de Cuadra: importación, ejecución de paquetes, bitácora y exportación."""
+"""Motor de Folio Auditor: importación, ejecución de paquetes, bitácora y exportación."""
 
-__version__ = "0.8.0"
+__version__ = "0.9.1"

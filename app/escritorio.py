@@ -56,7 +56,7 @@ if not getattr(sys, "frozen", False):
     if _RAIZ_LOCAL not in sys.path:
         sys.path.insert(0, _RAIZ_LOCAL)
 
-from motor.rutas import raiz_recursos, raiz_trabajo  # noqa: E402
+from motor.rutas import raiz_recursos, raiz_salidas, raiz_trabajo  # noqa: E402
 
 RAIZ = raiz_trabajo()
 RAIZ_RECURSOS = raiz_recursos()
@@ -3192,7 +3192,7 @@ def _instalar_manejador_errores(ventana: VentanaCuadra) -> None:
     def _manejador(tipo, valor, tb):
         detalle = "".join(traceback.format_exception(tipo, valor, tb))
         try:
-            sal = RAIZ / "salidas"
+            sal = raiz_salidas()
             sal.mkdir(parents=True, exist_ok=True)
             (sal / "ultimo_error.log").write_text(detalle, encoding="utf-8")
         except Exception:  # noqa: BLE001

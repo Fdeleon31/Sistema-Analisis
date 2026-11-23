@@ -31,7 +31,7 @@ from .importador import (
     importar,
     validar_identificador,
 )
-from .rutas import raiz_recursos, raiz_trabajo
+from .rutas import raiz_recursos, raiz_salidas, raiz_trabajo
 from .sugerencias import detectar_fila_encabezado
 
 RAIZ = raiz_trabajo()
@@ -250,7 +250,7 @@ def ejecutar_encargo(
     manifiesto = cargar_manifiesto(_carpeta_paquetes() / paquete)
     encargo = encargo or {}
     opciones = opciones or {}
-    carpeta = Path(salida) if salida else raiz_trabajo() / "salidas" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    carpeta = Path(salida) if salida else raiz_salidas() / datetime.now().strftime("%Y%m%d-%H%M%S")
     carpeta.mkdir(parents=True, exist_ok=True)
     bitacora = Bitacora(carpeta / "bitacora.jsonl")
     bitacora.registrar("inicio", version_motor=__version__, paquete=manifiesto["id"],

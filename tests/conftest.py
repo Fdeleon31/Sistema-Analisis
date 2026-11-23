@@ -3,6 +3,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# Las corridas de prueba van a una carpeta temporal, no al portafolio real (salidas/) del auditor.
+import os as _os  # noqa: E402
+import tempfile as _tempfile  # noqa: E402
+
+_os.environ.setdefault("FOLIO_SALIDAS", _tempfile.mkdtemp(prefix="folio_pruebas_salidas_"))
+
 import pytest
 
 

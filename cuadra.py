@@ -43,7 +43,7 @@ from motor.privacidad import (
     exportar_diagnostico_anonimizado,
     purgar_corridas_expiradas,
 )
-from motor.rutas import raiz_recursos, raiz_trabajo
+from motor.rutas import raiz_recursos, raiz_salidas, raiz_trabajo
 from motor.seguridad import ErrorSeguridad, sanitizar_dataframe_excel
 from motor.servicio import ejecutar_encargo
 from motor.sintetico import generar, generar_diario_asientos, generar_estado_cuenta_bancos, generar_facturas_fe
@@ -167,7 +167,7 @@ def listar_conectores(erp_id: str | None = None) -> None:
 def muestra(args) -> Path:
     ruta = Path(args.archivo)
     df = pd.read_excel(ruta) if ruta.suffix.lower() in (".xlsx", ".xls") else pd.read_csv(ruta)
-    carpeta = args.salida or RAIZ / "salidas" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    carpeta = args.salida or raiz_salidas() / datetime.now().strftime("%Y%m%d-%H%M%S")
     carpeta.mkdir(parents=True, exist_ok=True)
     if args.metodo == "mus":
         seleccion, plan = seleccionar_mus(
@@ -195,7 +195,7 @@ def evaluar(args) -> Path:
     ruta = Path(args.errores)
     df = pd.read_excel(ruta) if ruta.suffix.lower() in (".xlsx", ".xls") else pd.read_csv(ruta)
     r = evaluar_mus(df, args.intervalo, args.tolerable, args.confianza, args.id, args.libros, args.auditado)
-    carpeta = args.salida or RAIZ / "salidas" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    carpeta = args.salida or raiz_salidas() / datetime.now().strftime("%Y%m%d-%H%M%S")
     carpeta.mkdir(parents=True, exist_ok=True)
     destino = carpeta / "evaluacion_mus.xlsx"
     with pd.ExcelWriter(destino) as xls:

@@ -10,7 +10,7 @@ import yaml
 
 from .bitacora import Bitacora
 from .revision import ROLES_FIRMA, cargar_revisiones
-from .rutas import raiz_trabajo
+from .rutas import raiz_salidas, raiz_trabajo
 
 
 def carpeta_encargos() -> Path:
@@ -20,7 +20,7 @@ def carpeta_encargos() -> Path:
 
 
 def carpeta_salidas() -> Path:
-    carpeta = raiz_trabajo() / "salidas"
+    carpeta = raiz_salidas()
     carpeta.mkdir(parents=True, exist_ok=True)
     return carpeta
 

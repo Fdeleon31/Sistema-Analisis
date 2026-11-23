@@ -5,6 +5,7 @@ import base64
 import json
 import os
 import re
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,8 +18,10 @@ from .cripto import (
     generar_par_ed25519,
     hashear_contrasena,
     huella_clave_publica,
+    requiere_migracion_scrypt,
     verificar_contrasena,
 )
+from . import cripto as _cripto_mod
 from .rutas import raiz_trabajo
 from .seguridad import ErrorSeguridad
 
@@ -129,6 +132,17 @@ class SesionAutenticada:
     @property
     def semilla_privada_bytes(self) -> bytes | None:
         return self._semilla_privada
+
+
+_SENUELO: dict[str, Any] = {}
+
+
+def _registro_senuelo() -> dict[str, Any]:
+    """Registro scrypt ficticio (se calcula una vez) para igualar el tiempo de un login con usuario inexistente."""
+    if not _SENUELO or int(_SENUELO.get("n", 0)) != _cripto_mod.SCRYPT_N:
+        _SENUELO.clear()
+        _SENUELO.update(hashear_contrasena(secrets.token_urlsafe(24)))
+    return _SENUELO
 
 
 def puede_firmar_rol(sesion: SesionAutenticada, rol: str) -> bool:
@@ -382,6 +396,8 @@ class GestorUsuarios:
         u_txt = (usuario or "").strip() if isinstance(usuario, str) else ""
         reg = self._buscar_usuario(datos, u_txt)
         if reg is None:
+            # Mismo costo que con un usuario real para no revelar por tiempo qué usuarios existen.
+            verificar_contrasena(contrasena if isinstance(contrasena, str) else "", _registro_senuelo())
             self._bitacora(u_txt or "desconocido").registrar(
                 "login_fallido",
                 usuario_intentado=u_txt,
@@ -472,6 +488,16 @@ class GestorUsuarios:
             raise ErrorSeguridad(f"El usuario '{u_id}' no corresponde al modo '{modo_acceso}'.")
 
         semilla = descifrar_clave_privada(reg["clave_privada_cifrada"], contrasena)
+        if requiere_migracion_scrypt(reg.get("contrasena_hash")) or requiere_migracion_scrypt(
+            reg.get("clave_privada_cifrada")
+        ):
+            # Sube el costo scrypt de registros antiguos (2^14 -> vigente) con la contraseña recién verificada.
+            n_anterior = int((reg.get("contrasena_hash") or {}).get("n", 0) or 0)
+            reg["contrasena_hash"] = hashear_contrasena(contrasena)
+            reg["clave_privada_cifrada"] = cifrar_clave_privada(semilla, contrasena)
+            self._bitacora(u_id).registrar(
+                "migracion_kdf", usuario=u_id, n_anterior=n_anterior, n_nuevo=reg["contrasena_hash"]["n"]
+            )
         ahora_iso = ahora.isoformat(timespec="seconds")
         reg["intentos_fallidos"] = 0
         reg["bloqueado_hasta_utc"] = None

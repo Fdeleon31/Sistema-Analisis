@@ -3218,7 +3218,12 @@ def iniciar_escritorio(argv: list[str] | None = None) -> int:
     app.setStyle("Fusion")
     gestor = GestorUsuarios(RAIZ)
     sesion: SesionAutenticada | None = None
-    if "--autoprueba" not in args and "--sin-login" not in args:
+    omitir_login = "--sin-login" in args
+    if omitir_login and gestor.existe_configuracion():
+        # Con control de acceso activo no se permite saltar el login: queda constancia del intento.
+        gestor._bitacora("sistema").registrar("intento_omitir_login", origen="escritorio --sin-login")
+        omitir_login = False
+    if "--autoprueba" not in args and not omitir_login:
         dlg_login = DialogoLoginFolio(
             gestor=gestor,
             permitir_evaluacion=not gestor.existe_configuracion(),

@@ -1191,12 +1191,12 @@ def _render_bitacora_y_cedula() -> None:
 
 def _render_login_web(gestor: GestorUsuarios) -> bool:
     """Muestra la pantalla de inicio de sesión web si la seguridad local está configurada."""
-    if (
-        not gestor.existe_configuracion()
-        or st.session_state.get("sesion_web") is not None
-        or os.environ.get("FOLIO_OMITIR_LOGIN_WEB") == "1"
-    ):
+    if not gestor.existe_configuracion() or st.session_state.get("sesion_web") is not None:
         return True
+    if os.environ.get("FOLIO_OMITIR_LOGIN_WEB") == "1" and not st.session_state.get("_aviso_omitir_login"):
+        # Con control de acceso activo la variable ya no salta el login; se registra el intento una vez por sesión.
+        st.session_state["_aviso_omitir_login"] = True
+        gestor._bitacora("sistema").registrar("intento_omitir_login", origen="FOLIO_OMITIR_LOGIN_WEB")
 
     st.markdown(
         "\n".join([

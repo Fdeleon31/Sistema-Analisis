@@ -225,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
 
     esc = sub.add_parser("escritorio", help="Abre la aplicación nativa de escritorio (PySide6, 100 %% sin internet)")
     esc.add_argument("--autoprueba", action="store_true", help="Ejecuta la autoprueba de escritorio sin mostrar ventana y sale")
-    esc.add_argument("--sin-login", action="store_true", help="Abre el escritorio omitiendo el diálogo de inicio de sesión")
+    esc.add_argument("--sin-login", action="store_true", help="Abre el escritorio sin inicio de sesión (solo si el control de acceso no está activado)")
 
     ver = sub.add_parser("verificar", help="Verifica integridad criptográfica (Ed25519 + SHA-256) de una carpeta de corrida")
     ver.add_argument("carpeta", type=Path, help="Ruta de la carpeta de salida a verificar")

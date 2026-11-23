@@ -231,6 +231,13 @@ def huella_clave_publica(pub: bytes) -> str:
 # ---------------------------------------------------------------------------
 
 
+# scrypt: OWASP recomienda N=2^17, r=8, p=1. Los registros con N menor (versiones <= 0.9.0 usaban 2^14)
+# se aceptan y se migran al siguiente inicio de sesión correcto.
+SCRYPT_N = 2**17
+SCRYPT_N_MINIMO = 2**14
+SCRYPT_N_MAXIMO = 2**20
+
+
 def derivar_clave_scrypt(
     contrasena: str,
     sal: bytes,
@@ -247,6 +254,9 @@ def derivar_clave_scrypt(
         raise ErrorSeguridad("La sal criptográfica no puede estar vacía.")
     if largo <= 0 or n < 2 or (n & (n - 1)) != 0 or r <= 0 or p <= 0:
         raise ErrorSeguridad("Parámetros scrypt inválidos.")
+    # Límites a parámetros leídos de archivos (usuarios.json): ni tan bajos que debiliten, ni tan altos que congelen.
+    if n < SCRYPT_N_MINIMO or n > SCRYPT_N_MAXIMO or r > 32 or p > 16:
+        raise ErrorSeguridad(f"Parámetros scrypt fuera de rango permitido (n={n}, r={r}, p={p}).")
     maxmem = max(64 * 1024 * 1024, 256 * n * r)
     try:
         return hashlib.scrypt(
@@ -267,7 +277,7 @@ def hashear_contrasena(contrasena: str) -> dict[str, Any]:
     if not isinstance(contrasena, str) or not contrasena:
         raise ErrorSeguridad("La contraseña no puede estar vacía.")
     sal = secrets.token_bytes(16)
-    n, r, p = 16384, 8, 1
+    n, r, p = SCRYPT_N, 8, 1
     digest = derivar_clave_scrypt(contrasena, sal, largo=32, n=n, r=r, p=p)
     return {
         "algoritmo": "scrypt",
@@ -277,6 +287,14 @@ def hashear_contrasena(contrasena: str) -> dict[str, Any]:
         "sal_b64": base64.b64encode(sal).decode("ascii"),
         "hash_b64": base64.b64encode(digest).decode("ascii"),
     }
+
+
+def requiere_migracion_scrypt(registro: dict[str, Any] | None) -> bool:
+    """True si el registro (contraseña o clave privada) usa un costo scrypt menor al vigente."""
+    try:
+        return int((registro or {}).get("n", 0)) < SCRYPT_N
+    except (TypeError, ValueError):
+        return True
 
 
 def verificar_contrasena(contrasena: str, registro: dict[str, Any]) -> bool:
@@ -686,7 +704,7 @@ def cifrar_clave_privada(semilla: bytes, contrasena: str) -> dict[str, Any]:
     if not isinstance(contrasena, str) or not contrasena:
         raise ErrorSeguridad("La contraseña para proteger la clave privada no puede estar vacía.")
     sal = secrets.token_bytes(16)
-    n, r, p = 16384, 8, 1
+    n, r, p = SCRYPT_N, 8, 1
     clave = derivar_clave_scrypt(contrasena, sal, largo=32, n=n, r=r, p=p)
     paquete_gcm = cifrar_aes_gcm(clave, sem_b, aad=_AAD_CLAVE_PRIVADA)
     return {

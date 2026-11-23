@@ -17,6 +17,7 @@ import tomllib
 from typing import Any
 
 from .bitacora import Bitacora
+from . import cripto as _cripto
 from .cripto import (
     cifrar_aes_gcm,
     derivar_clave_scrypt,
@@ -28,7 +29,7 @@ from .seguridad import ErrorSeguridad
 
 SUFIJO_BOVEDA = ".folioenc"
 _BLOQUE_BORRADO = 65_536
-_SCRYPT_N = 16384
+_SCRYPT_N = 16384  # solo para leer contenedores antiguos sin scrypt_n
 _SCRYPT_R = 8
 _SCRYPT_P = 1
 
@@ -181,12 +182,13 @@ def cifrar_archivo_boveda(
     else:
         assert contrasena is not None
         sal = secrets.token_bytes(16)
+        n_vigente = _cripto.SCRYPT_N  # costo vigente para contenedores nuevos; los antiguos guardan su propio n
         clave_32b = derivar_clave_scrypt(
-            contrasena, sal, largo=32, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P
+            contrasena, sal, largo=32, n=n_vigente, r=_SCRYPT_R, p=_SCRYPT_P
         )
         contenedor["modo"] = "scrypt"
         contenedor["sal_b64"] = base64.b64encode(sal).decode("ascii")
-        contenedor["scrypt_n"] = _SCRYPT_N
+        contenedor["scrypt_n"] = n_vigente
         contenedor["scrypt_r"] = _SCRYPT_R
         contenedor["scrypt_p"] = _SCRYPT_P
 

@@ -6,7 +6,7 @@
 
 ## 1. Alcance soportado
 
-Esta política cubre los componentes actuales de la rama principal (`0.8.x`):
+Esta política cubre los componentes actuales de la rama principal (`0.9.x`):
 - Motor analítico, importación, bitácora, criptografía, RBAC, privacidad y exportación (`motor/`).
 - Conectores ERP y lectura segura de fuentes SQL y extractos PDF (`conectores/`).
 - Copiloto SQL local sin internet (`ia/copiloto.py`).
@@ -88,3 +88,35 @@ Este flujo ejecuta en secuencia:
 | **ISO/IEC 27001:2022 y SOC 2** | Alineamiento técnico con controles de acceso (`A.8.3`), gestión de vulnerabilidades técnicas (`A.8.8`), eliminación y enmascaramiento (`A.8.10`/`A.8.11`), criptografía (`A.8.24`), desarrollo seguro (`A.8.25`/`A.8.28`/`A.8.29`), y criterios SOC 2 de Seguridad, Confidencialidad e Integridad de Procesamiento. |
 | **OWASP ASVS v4.0.3 y SLSA** | Verificación sobre entradas hostiles, autenticación local `scrypt`, SBOM CycloneDX 1.5 y manifiestos `SHA256SUMS.txt`. |
 | **NIGC 1, NIA 220/230/500 y Ley 81 (Panamá)** | Segregación obligatoria `Preparador ≠ Revisor ≠ Socio`, cierre no repudiable `sello.json`, ventana de 60 días, bóveda `.folioenc` y procesamiento 100 % local sin transferencia internacional de datos. |
+
+---
+
+## 6. Modelo de amenazas: qué protege y qué no
+
+Folio Auditor corre en el computador del auditor. Los controles locales protegen contra errores y contra
+terceros sin acceso a esa cuenta de Windows, pero **no contra quien ya controla la misma cuenta**: esa
+persona puede leer, copiar o borrar los archivos. Por eso la confianza de un tercero se apoya en firmas
+que se verifican **fuera** de ese computador.
+
+| Amenaza | Control | Límite conocido |
+| :--- | :--- | :--- |
+| Alterar la cédula, la bitácora, las revisiones o cualquier archivo de una corrida sellada | `sello.json` versión 2: SHA-256 de **todos** los archivos de la carpeta, firma Ed25519 y rechazo de archivos agregados | Antes del sellado, la cadena SHA-256 de la bitácora no tiene clave y se puede recalcular |
+| Re-sellar una carpeta alterada con una clave inventada a nombre del Socio | `verificar` compara la huella con el registro de claves de la firma (`seguridad/usuarios.json` o `--claves`) | Sin registro de claves, `verificar` responde **ÍNTEGRO, FIRMANTE SIN VERIFICAR** (código 2), nunca "VÁLIDO" |
+| Subirse de perfil, cambiar roles, claves públicas o políticas editando `usuarios.json` | Firma Ed25519 del Administrador sobre identidades y políticas; si no cuadra, se bloquea el login y el registro de claves | Quien reemplace el archivo completo con un Administrador propio puede entrar, pero sus claves no están en el registro exportado, así que los sellos que emita no se verifican |
+| Usar la clave privada propia en el registro de otro usuario | Al iniciar sesión se comprueba que la clave privada corresponda a la pública registrada | — |
+| Adivinar contraseñas copiando `usuarios.json` | scrypt N=2^17, r=8, p=1 (OWASP); los registros antiguos se migran al entrar | Contraseñas débiles siguen siendo débiles: la política exige 10 caracteres o más |
+| Saber qué usuarios existen | Mismo costo scrypt con usuarios inexistentes (señuelo) | — |
+| Saltar el login | Con el control de acceso activo, `FOLIO_OMITIR_LOGIN_WEB` y `escritorio --sin-login` se ignoran y se registran | La línea de comandos (`cuadra.py correr`) no pide login: es una herramienta del operador del equipo |
+
+### Cómo entrega la firma evidencia verificable a un tercero
+
+```powershell
+# En la firma (una vez, o cada vez que cambien los usuarios)
+python cuadra.py seguridad --exportar-claves claves_firma.json
+
+# En el computador del auditor externo o del revisor de calidad
+python cuadra.py verificar ruta\de\la\corrida --claves claves_firma.json
+```
+
+`claves_firma.json` solo contiene usuarios, perfiles y claves públicas (ni contraseñas ni claves privadas).
+Conviene enviarlo por un canal distinto al de la carpeta de la corrida, o confirmar la huella por teléfono.

@@ -14,6 +14,9 @@ from typing import Any
 from .bitacora import Bitacora
 from .cripto import (
     cifrar_clave_privada,
+    clave_publica_ed25519,
+    firmar_ed25519,
+    verificar_ed25519,
     descifrar_clave_privada,
     generar_par_ed25519,
     hashear_contrasena,
@@ -132,6 +135,13 @@ class SesionAutenticada:
     @property
     def semilla_privada_bytes(self) -> bytes | None:
         return self._semilla_privada
+
+
+def _semilla_de(actor: "SesionAutenticada") -> bytes:
+    semilla = getattr(actor, "semilla_privada_bytes", None)
+    if not semilla:
+        raise ErrorSeguridad("La sesión del Administrador no tiene su clave de firma en memoria; vuelve a iniciar sesión.")
+    return semilla
 
 
 _SENUELO: dict[str, Any] = {}
@@ -258,6 +268,83 @@ class GestorUsuarios:
             "ultimo_acceso_utc": reg.get("ultimo_acceso_utc"),
         }
 
+    # --- Integridad de identidades (perfiles, roles, claves públicas y políticas) ----------------
+
+    @staticmethod
+    def _contenido_identidad(datos: dict[str, Any]) -> bytes:
+        """Lo que solo un Administrador puede cambiar. Excluye contadores de login y la contraseña
+        (que el propio usuario cambia; sin su clave privada no sirve para firmar)."""
+        usuarios = sorted(
+            (
+                {
+                    "usuario": str(u.get("usuario", "")).lower(),
+                    "nombre_completo": u.get("nombre_completo"),
+                    "perfil": u.get("perfil"),
+                    "rol_auditoria": u.get("rol_auditoria"),
+                    "activo": bool(u.get("activo", True)),
+                    "clave_publica_b64": u.get("clave_publica_b64"),
+                }
+                for u in datos.get("usuarios", [])
+            ),
+            key=lambda x: x["usuario"],
+        )
+        contenido = {"politicas": datos.get("politicas", {}), "usuarios": usuarios}
+        return json.dumps(contenido, sort_keys=True, ensure_ascii=False).encode("utf-8")
+
+    def _firmar_identidad(self, datos: dict[str, Any], admin_usuario: str, semilla_admin: bytes) -> None:
+        reg_admin = self._buscar_usuario(datos, admin_usuario)
+        if reg_admin is None or reg_admin.get("perfil") != PERFIL_ADMIN:
+            raise ErrorSeguridad("Solo un Administrador registrado puede firmar la configuración de usuarios.")
+        firma = firmar_ed25519(semilla_admin, self._contenido_identidad(datos))
+        datos["firma_identidad"] = {
+            "algoritmo": "Ed25519",
+            "administrador": reg_admin["usuario"],
+            "huella_clave": reg_admin["huella_clave"],
+            "fecha_utc": _ahora_iso(),
+            "firma_b64": base64.b64encode(firma).decode("ascii"),
+        }
+
+    def estado_integridad(self) -> dict[str, Any]:
+        """Verifica que perfiles, roles, claves públicas y políticas no se editaron fuera de la aplicación.
+
+        estado: 'firmado' (íntegro), 'sin_firma' (archivo de una versión anterior; se firma en la próxima
+        acción del Administrador) o 'alterado'.
+        """
+        if not self.ruta_usuarios.exists():
+            return {"estado": "sin_configuracion", "motivo": "No hay usuarios configurados."}
+        datos = self._leer_almacen()
+        firma = datos.get("firma_identidad")
+        if not firma:
+            return {
+                "estado": "sin_firma",
+                "motivo": "usuarios.json no tiene firma de integridad (creado con una versión anterior).",
+            }
+        try:
+            reg_admin = self._buscar_usuario(datos, str(firma.get("administrador", "")))
+            if reg_admin is None or reg_admin.get("perfil") != PERFIL_ADMIN:
+                raise ValueError("el administrador firmante ya no es Administrador")
+            pub = base64.b64decode(str(reg_admin["clave_publica_b64"]), validate=True)
+            if huella_clave_publica(pub) != firma.get("huella_clave"):
+                raise ValueError("la clave del administrador firmante cambió")
+            sig = base64.b64decode(str(firma["firma_b64"]), validate=True)
+            if not verificar_ed25519(pub, self._contenido_identidad(datos), sig):
+                raise ValueError("la firma no corresponde al contenido")
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "estado": "alterado",
+                "motivo": f"usuarios.json fue modificado fuera de Folio Auditor ({exc}).",
+            }
+        return {"estado": "firmado", "motivo": f"Firmado por {firma['administrador']}.", "administrador": firma["administrador"]}
+
+    def _exigir_integridad(self) -> None:
+        est = self.estado_integridad()
+        if est["estado"] == "alterado":
+            self._bitacora("sistema").registrar("usuarios_alterados", motivo=est["motivo"])
+            raise ErrorSeguridad(
+                est["motivo"] + " Por seguridad no se permite iniciar sesión ni firmar; restaure el archivo "
+                "desde un respaldo o reinicialice la seguridad."
+            )
+
     def existe_configuracion(self) -> bool:
         if not self.ruta_usuarios.exists():
             return False
@@ -310,6 +397,8 @@ class GestorUsuarios:
             "politicas": politicas,
             "usuarios": usuarios_nuevos,
         }
+        semilla_admin = descifrar_clave_privada(reg_admin["clave_privada_cifrada"], admin_contrasena)
+        self._firmar_identidad(datos, reg_admin["usuario"], semilla_admin)
         self._guardar_almacen(datos)
 
         bit = self._bitacora(reg_admin["usuario"])
@@ -351,6 +440,7 @@ class GestorUsuarios:
     ) -> dict[str, Any]:
         """Crea un usuario nuevo; requiere sesión activa de Administrador."""
         self._exigir_admin(actor)
+        self._exigir_integridad()
         if not self.existe_configuracion():
             raise ErrorSeguridad("Debes inicializar la configuración de seguridad antes de crear usuarios.")
 
@@ -367,6 +457,7 @@ class GestorUsuarios:
             rol_auditoria=rol_auditoria_extra,
         )
         datos["usuarios"].append(nuevo)
+        self._firmar_identidad(datos, actor.usuario, _semilla_de(actor))
         self._guardar_almacen(datos)
 
         self._bitacora(actor.usuario).registrar(
@@ -388,6 +479,7 @@ class GestorUsuarios:
         if modo_acceso not in modos_validos:
             raise ErrorSeguridad(f"Modo de acceso inválido: {modo_acceso!r}.")
 
+        self._exigir_integridad()
         datos = self._leer_almacen()
         politicas = datos["politicas"]
         max_intentos = int(politicas.get("max_intentos", MAX_INTENTOS_FALLIDOS))
@@ -488,6 +580,11 @@ class GestorUsuarios:
             raise ErrorSeguridad(f"El usuario '{u_id}' no corresponde al modo '{modo_acceso}'.")
 
         semilla = descifrar_clave_privada(reg["clave_privada_cifrada"], contrasena)
+        if clave_publica_ed25519(semilla) != base64.b64decode(str(reg["clave_publica_b64"])):
+            self._bitacora(u_id).registrar("clave_privada_no_corresponde", usuario=u_id)
+            raise ErrorSeguridad(
+                "La clave privada guardada no corresponde a la clave pública registrada: usuarios.json fue alterado."
+            )
         if requiere_migracion_scrypt(reg.get("contrasena_hash")) or requiere_migracion_scrypt(
             reg.get("clave_privada_cifrada")
         ):
@@ -503,6 +600,10 @@ class GestorUsuarios:
         reg["bloqueado_hasta_utc"] = None
         reg["ultimo_intento_fallido_utc"] = None
         reg["ultimo_acceso_utc"] = ahora_iso
+        if perfil == PERFIL_ADMIN and not datos.get("firma_identidad"):
+            # Archivo de una versión anterior: el primer Administrador que entra lo firma.
+            self._firmar_identidad(datos, u_id, semilla)
+            self._bitacora(u_id).registrar("usuarios_firmados", administrador=u_id)
         self._guardar_almacen(datos)
 
         self._bitacora(u_id).registrar(
@@ -559,6 +660,7 @@ class GestorUsuarios:
     ) -> None:
         """Restablece contraseña y desbloquea cuenta desde Administrador, rotando el par Ed25519."""
         self._exigir_admin(actor)
+        self._exigir_integridad()
         if not self.existe_configuracion():
             raise ErrorSeguridad("La seguridad aún no ha sido inicializada.")
         validar_politica_contrasena(nueva_contrasena)
@@ -580,6 +682,7 @@ class GestorUsuarios:
         reg["bloqueado_hasta_utc"] = None
         reg["ultimo_intento_fallido_utc"] = None
         reg["actualizado_utc"] = _ahora_iso()
+        self._firmar_identidad(datos, actor.usuario, _semilla_de(actor))
         self._guardar_almacen(datos)
 
         self._bitacora(actor.usuario).registrar(
@@ -593,6 +696,7 @@ class GestorUsuarios:
     def cambiar_estado_usuario(self, actor: SesionAutenticada, usuario_objetivo: str, activo: bool) -> None:
         """Activa o desactiva un usuario protegiendo que quede al menos un Administrador activo."""
         self._exigir_admin(actor)
+        self._exigir_integridad()
         if not self.existe_configuracion():
             raise ErrorSeguridad("La seguridad aún no ha sido inicializada.")
 
@@ -613,6 +717,7 @@ class GestorUsuarios:
 
         reg["activo"] = nuevo_estado
         reg["actualizado_utc"] = _ahora_iso()
+        self._firmar_identidad(datos, actor.usuario, _semilla_de(actor))
         self._guardar_almacen(datos)
 
         self._bitacora(actor.usuario).registrar(
@@ -625,6 +730,7 @@ class GestorUsuarios:
     def actualizar_politicas(self, actor: SesionAutenticada, **cambios: Any) -> dict[str, Any]:
         """Actualiza las políticas locales de seguridad; solo permitido para Administrador."""
         self._exigir_admin(actor)
+        self._exigir_integridad()
         if not self.existe_configuracion():
             raise ErrorSeguridad("La seguridad aún no ha sido inicializada.")
 
@@ -646,6 +752,7 @@ class GestorUsuarios:
                 politicas[clave] = valor
 
         datos["politicas"] = politicas
+        self._firmar_identidad(datos, actor.usuario, _semilla_de(actor))
         self._guardar_almacen(datos)
 
         self._bitacora(actor.usuario).registrar(
@@ -670,6 +777,7 @@ class GestorUsuarios:
         """
         if not self.ruta_usuarios.exists():
             return {}
+        self._exigir_integridad()
         registro: dict[str, dict[str, Any]] = {}
         for u in self.listar_usuarios():
             registro[u["huella_clave"]] = {
@@ -702,7 +810,13 @@ def verificar_sello_anclado(carpeta: str | Path, ruta_base: str | Path | None = 
     """
     from motor.cripto import verificar_sello_corrida
 
-    registro = GestorUsuarios(ruta_base).registro_claves()
+    try:
+        registro = GestorUsuarios(ruta_base).registro_claves()
+    except ErrorSeguridad as exc:
+        return {
+            "valido": False, "motivo": str(exc), "detalle": {}, "huella_clave": "", "usuario": "", "rol": "",
+            "firmante_verificado": False,
+        }
     return verificar_sello_corrida(carpeta, claves_registradas=registro or None)
 
 

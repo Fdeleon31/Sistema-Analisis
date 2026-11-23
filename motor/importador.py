@@ -106,8 +106,15 @@ def importar(
     tabla_origen: str | None = None,
     consulta_sql: str | None = None,
     perfil_erp: str | None = None,
+    rellenar_hacia_abajo: bool = False,
 ) -> dict:
-    """Carga un archivo o fuente SQL en DuckDB sin tocar el original, normaliza y devuelve el control."""
+    """Carga un archivo o fuente SQL en DuckDB sin tocar el original, normaliza y devuelve el control.
+
+    `rellenar_hacia_abajo`: en reportes agrupados (QuickBooks "Journal", Sage "General Journal") la fecha y
+    el número de asiento solo aparecen en la primera línea; las demás líneas del asiento los heredan de la
+    anterior. Solo se rellenan filas que tienen cuenta (los subtotales sin cuenta se siguen excluyendo) y
+    cada relleno queda contado en el control de importación.
+    """
     tabla = validar_identificador(tabla)
     if debito_credito and indicador_dc:
         raise ErrorImportacion("No uses --debito-credito e --indicador-dc al mismo tiempo.")
@@ -134,6 +141,10 @@ def importar(
         control["archivo"] = ruta_path.name
         control["sha256"] = sha256_archivo(ruta_path)
         extension = ruta_path.suffix.lower()
+        if saltar_filas:
+            control["transformaciones"].append(
+                f"se omitieron {int(saltar_filas)} fila(s) de título antes del encabezado"
+            )
 
         if extension in EXTENSIONES_TEXTO:
             codificacion = codificacion or detectar_codificacion(ruta_path)
@@ -182,6 +193,9 @@ def importar(
         _crear_monto_desde_debito_credito(con, tabla, *debito_credito, separador_decimal, control)
     elif indicador_dc:
         _aplicar_indicador_dc(con, tabla, indicador_dc, separador_decimal, control)
+
+    if rellenar_hacia_abajo:
+        _rellenar_hacia_abajo(con, tabla, control)
 
     columnas_actuales = _columnas(con, tabla)
     if generar_linea and "linea" not in columnas_actuales and "asiento" in columnas_actuales:
@@ -614,11 +628,15 @@ def _normalizar_fecha(con, tabla: str, formato_fecha: str | None, control: dict,
                 exp = _exigir_siglo_actual(exp)
             candidatos.append((f, exp))
 
-    validos = [(nombre, exp) for nombre, exp in candidatos if fallan(exp) == 0]
-    # Filas que no son fechas en absoluto (títulos, totales) se toleran si son muy pocas.
-    if not validos:
-        tolerancia = max(5, total // 1000)
-        validos = [(n, e) for n, e in candidatos if fallan(e) <= tolerancia]
+    fallas = {nombre: fallan(exp) for nombre, exp in candidatos}
+    validos = [(nombre, exp) for nombre, exp in candidatos if fallas[nombre] == 0]
+    # Filas que no son fechas en absoluto (títulos, totales) se toleran si son muy pocas, pero solo
+    # para el formato con MENOS fallas: un formato que además falla con fechas reales (p. ej. dd/mm ante
+    # 01/15/2025) no compite y no vuelve "ambiguo" un archivo que no lo es.
+    if not validos and candidatos:
+        tolerancia = min(max(5, total // 1000), max(1, total // 20))
+        minimo = min(fallas.values())
+        validos = [(n, e) for n, e in candidatos if fallas[n] == minimo and minimo <= tolerancia]
 
     if not validos:
         ejemplos = con.execute(f"SELECT DISTINCT {col_q} FROM {tabla_q} WHERE {col_q} IS NOT NULL LIMIT 5").fetchall()
@@ -640,7 +658,7 @@ def _normalizar_fecha(con, tabla: str, formato_fecha: str | None, control: dict,
         )
 
     nombre, expresion = validos[0]
-    fechas_fallidas = fallan(expresion)
+    fechas_fallidas = fallas[nombre]
     con.execute(f"ALTER TABLE {tabla_q} ALTER {col_q} TYPE DATE USING {expresion}")
     control["formato_fecha"] = nombre
     control["transformaciones"].append(f"{columna}: formato {nombre}")
@@ -652,6 +670,40 @@ def _normalizar_fecha(con, tabla: str, formato_fecha: str | None, control: dict,
 
 
 # --- otros -----------------------------------------------------------------
+
+def _rellenar_hacia_abajo(con, tabla: str, control: dict, columnas: tuple[str, ...] = ("fecha", "asiento")) -> None:
+    """Copia fecha y asiento de la fila anterior a las líneas de detalle que los traen vacíos."""
+    actuales = _columnas(con, tabla)
+    cols = [c for c in columnas if c in actuales]
+    if not cols or "cuenta" not in actuales:
+        return
+    tabla_q = citar_identificador_sql(tabla)
+
+    def vacio(c: str) -> str:
+        cq = citar_identificador_sql(c)
+        return f"({cq} IS NULL OR TRIM(CAST({cq} AS VARCHAR)) = '')"
+
+    cuenta_ok = f"NOT {vacio('cuenta')}"
+    hijas = f"{cuenta_ok} AND " + " AND ".join(vacio(c) for c in cols)
+    n = con.execute(f"SELECT COUNT(*) FROM {tabla_q} WHERE {hijas}").fetchone()[0]
+    if not n:
+        return
+    reemplazos = []
+    for c in cols:
+        cq = citar_identificador_sql(c)
+        reemplazos.append(
+            f"CASE WHEN {hijas} THEN LAST_VALUE(NULLIF(TRIM(CAST({cq} AS VARCHAR)), '') IGNORE NULLS) "
+            f"OVER (ORDER BY rowid ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) "
+            f"ELSE CAST({cq} AS VARCHAR) END AS {cq}"
+        )
+    con.execute(
+        f"CREATE OR REPLACE TABLE {tabla_q} AS SELECT * REPLACE ({', '.join(reemplazos)}) FROM {tabla_q} ORDER BY rowid"
+    )
+    control["filas_rellenadas"] = int(n)
+    control["transformaciones"].append(
+        f"{' y '.join(cols)}: copiados de la línea anterior en {n} línea(s) de detalle (reporte agrupado)"
+    )
+
 
 def _normalizar_entero_si_aplica(con, tabla: str, columna: str, control: dict) -> None:
     """Convierte a entero solo si todos los valores son números; si no, queda como texto."""

@@ -198,31 +198,7 @@ def vista_previa(
     return pd.read_csv(muestra, sep=None, engine="python", skiprows=saltar or None, nrows=20, dtype=str)
 
 
-def filas_crudas(ruta: Path, hoja: str | None = None) -> list[list[str]]:
-    """Primeras filas sin interpretar encabezados, para detectar dónde empieza la tabla."""
-    ext = ruta.suffix.lower()
-    if ext in (".xlsx", ".xlsm"):
-        wb = openpyxl.load_workbook(ruta, read_only=True, data_only=True)
-        try:
-            ws = wb[hoja] if isinstance(hoja, str) and hoja in wb.sheetnames else wb.active
-            return [["" if v is None else str(v) for v in fila] for fila in ws.iter_rows(max_row=20, values_only=True)]
-        finally:
-            wb.close()
-    if ext in EXTENSIONES_EXCEL:
-        return pd.read_excel(ruta, sheet_name=hoja or 0, header=None, nrows=20, dtype=str).values.tolist()
-    if ext not in EXTENSIONES_TEXTO:
-        return []
-    cod = detectar_codificacion(ruta, max_bytes=262144)
-    with ruta.open(encoding=cod, errors="replace", newline="") as f:
-        lineas = [f.readline() for _ in range(20)]
-    lineas = [ln for ln in lineas if ln]
-    if any(ln.strip().startswith("|") and ln.strip().endswith("|") for ln in lineas):
-        return [[ln.strip()] for ln in lineas]
-    try:
-        dialecto = csv.Sniffer().sniff("\n".join(lineas[-5:]), delimiters=",;\t|")
-    except csv.Error:
-        dialecto = csv.excel
-    return list(csv.reader(lineas, dialecto))
+from motor.servicio import filas_crudas  # noqa: E402,F401  (movida al motor para que la use la línea de comandos)
 
 
 def hojas_excel(ruta: Path) -> list[str]:

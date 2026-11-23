@@ -271,6 +271,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--hoja", help="Nombre de la hoja de Excel")
     p.add_argument("--debito-credito", help='Columnas de débito y crédito: "Debe,Haber"')
     p.add_argument("--indicador-dc", help='Columna indicadora D/H (ej. "SHKZG" o "SHKZG:H,C")')
+    p.add_argument(
+        "--rellenar-hacia-abajo", action="store_true",
+        help="Reportes agrupados: copia fecha y asiento de la línea anterior a las líneas de detalle que los traen vacíos",
+    )
     p.add_argument("--generar-linea", action="store_true", help='Genera "linea" secuencial por asiento si el origen no la trae')
     p.add_argument("--usuario-defecto", help='Asigna un valor por defecto a "usuario" si el origen no lo trae')
     p.add_argument("--tabla-origen", help="Tabla a consultar cuando el origen es SQL (.sqlite, .duckdb, .sql o URI)")
@@ -480,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
                 "debito_credito": tuple(c.strip() for c in args.debito_credito.split(",")) if args.debito_credito else None,
                 "indicador_dc": _indicador_dc(args.indicador_dc),
                 "generar_linea": True if args.generar_linea else None,
+                "rellenar_hacia_abajo": True if args.rellenar_hacia_abajo else None,
                 "usuario_por_defecto": args.usuario_defecto,
                 "tabla_origen": args.tabla_origen,
                 "consulta_sql": args.consulta_sql,

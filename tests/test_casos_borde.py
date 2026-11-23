@@ -110,3 +110,40 @@ def test_vista_previa_y_codificacion_rapida_en_archivo_grande(tmp_path):
     _leer_excel_grande_a_duckdb(con, ruta_xlsx, "m_xls", None, None, ctrl_xls)
     assert con.execute("SELECT COUNT(*) FROM m_xls").fetchone()[0] == 2
     assert any("streaming" in t for t in ctrl_xls["transformaciones"])
+
+
+def _mayor_corto(tmp_path, fechas, nombre):
+    import csv as _csv
+
+    ruta = tmp_path / nombre
+    with ruta.open("w", newline="", encoding="utf-8") as f:
+        w = _csv.writer(f)
+        w.writerow(["asiento", "linea", "fecha", "cuenta", "descripcion", "monto", "usuario"])
+        for i, fe in enumerate(fechas, start=1):
+            w.writerow([i, 1, fe, "5100", "Gasto sintético", "100.00", "ana"])
+            w.writerow([i, 2, fe, "1010", "Gasto sintético", "-100.00", "ana"])
+        w.writerow(["", "", "TOTAL", "", "", "0.00", ""])
+    return ruta
+
+
+def test_archivo_pequeno_con_fila_total_no_es_ambiguo(tmp_path):
+    """01/15 y 12/31 solo sirven como mes/día: la fila TOTAL no debe volver 'ambiguo' el archivo."""
+    import duckdb as _duckdb
+
+    from motor.importador import importar as _importar
+
+    ruta = _mayor_corto(tmp_path, ["01/15/2025", "02/03/2025", "12/31/2025"], "corto_mmdd.csv")
+    control = _importar(_duckdb.connect(), ruta, "mayor")
+    assert control["formato_fecha"] == "%m/%d/%Y"
+    assert control["filas"] == 6
+
+
+def test_archivo_realmente_ambiguo_se_sigue_deteniendo(tmp_path):
+    import duckdb as _duckdb
+    import pytest as _pytest
+
+    from motor.importador import ErrorImportacion as _Err, importar as _importar
+
+    ruta = _mayor_corto(tmp_path, ["01/02/2025", "03/04/2025", "05/06/2025"], "ambiguo.csv")
+    with _pytest.raises(_Err, match="ambiguas"):
+        _importar(_duckdb.connect(), ruta, "mayor")

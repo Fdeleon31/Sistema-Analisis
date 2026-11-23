@@ -166,4 +166,5 @@ def proponer_opciones_perfil(
         "formato_fecha": (perfil or {}).get("formato_fecha"),
         "generar_linea": generar_linea,
         "usuario_por_defecto": usuario_defecto,
+        "rellenar_hacia_abajo": bool((perfil or {}).get("rellenar_hacia_abajo")),
     }

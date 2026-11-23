@@ -22,7 +22,7 @@ def variantes(tmp_path_factory):
 @pytest.mark.parametrize(
     "nombre",
     ["latin1_encabezados_es", "fechas_ddmmaaaa", "montos_texto", "titulo_y_totales",
-     "debe_haber_excel", "asientos_alfanumericos", "utf8_bom", "coma_decimal"],
+     "debe_haber_excel", "asientos_alfanumericos", "utf8_bom", "coma_decimal", "quickbooks_journal"],
 )
 def test_variante_da_el_mismo_resultado(variantes, nombre):
     v = variantes[nombre]
@@ -42,3 +42,17 @@ def test_fila_de_total_se_excluye_y_se_reporta(variantes):
     v = variantes["titulo_y_totales"]
     control = importar(duckdb.connect(), v["ruta"], "mayor", **v["opciones"])
     assert control["filas_excluidas"] == 1
+
+
+def test_quickbooks_journal_rellena_y_lo_reporta(variantes):
+    """Sin relleno hacia abajo, las líneas de detalle se perdían como si fueran totales y los asientos
+    quedaban descuadrados. Con relleno, solo se excluyen subtotales y el TOTAL, y queda constancia."""
+    v = variantes["quickbooks_journal"]
+    sin = dict(v["opciones"], rellenar_hacia_abajo=False)
+    control_sin = importar(duckdb.connect(), v["ruta"], "mayor", **sin)
+    assert control_sin["filas"] < FILAS  # comportamiento anterior: líneas reales perdidas
+    control = importar(duckdb.connect(), v["ruta"], "mayor", **v["opciones"])
+    assert control["filas"] == FILAS
+    assert control["filas_rellenadas"] > 0
+    assert any("copiados de la línea anterior" in t for t in control["transformaciones"])
+    assert any("fila(s) de título" in t for t in control["transformaciones"])

@@ -14,7 +14,8 @@ aliases:
   cuenta: [ACCNT, Account, Split, Account No., Account full name]
   descripcion: [MEMO, Memo/Description, Memo, Description]
   monto: [AMOUNT, Amount]
-  usuario: [CREATED BY, User, Last Modified By, Name]
+  # "Name" NO es el usuario: en QuickBooks es el cliente o proveedor de la transacción.
+  usuario: [CREATED BY, Created By, User, Last Modified By]
 debito_credito_pares:
   - [DEBIT, CREDIT]
   - [Debit, Credit]
@@ -22,5 +23,7 @@ indicador_dc: null
 separador_decimal: "."
 formato_fecha: null
 generar_linea_si_falta: true
+# Reportes Journal/General Journal: fecha y número solo en la primera línea de cada asiento.
+rellenar_hacia_abajo: true
 usuario_defecto_si_falta: "(sin usuario en origen)"
 consultas_sql: []

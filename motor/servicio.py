@@ -32,6 +32,7 @@ from .importador import (
     validar_identificador,
 )
 from .rutas import raiz_recursos, raiz_trabajo
+from .sugerencias import detectar_fila_encabezado
 
 RAIZ = raiz_trabajo()
 CARPETA_PAQUETES = raiz_recursos() / "paquetes"
@@ -73,6 +74,33 @@ def paquetes_disponibles() -> dict[str, dict]:
             m = cargar_manifiesto(carpeta)
             salida[m["id"]] = m
     return salida
+
+
+def filas_crudas(ruta: Path, hoja: str | None = None) -> list[list[str]]:
+    """Primeras filas sin interpretar encabezados, para detectar dónde empieza la tabla."""
+    ext = ruta.suffix.lower()
+    if ext in (".xlsx", ".xlsm"):
+        wb = openpyxl.load_workbook(ruta, read_only=True, data_only=True)
+        try:
+            ws = wb[hoja] if isinstance(hoja, str) and hoja in wb.sheetnames else wb.active
+            return [["" if v is None else str(v) for v in fila] for fila in ws.iter_rows(max_row=20, values_only=True)]
+        finally:
+            wb.close()
+    if ext in EXTENSIONES_EXCEL:
+        return pd.read_excel(ruta, sheet_name=hoja or 0, header=None, nrows=20, dtype=str).values.tolist()
+    if ext not in EXTENSIONES_TEXTO:
+        return []
+    cod = detectar_codificacion(ruta, max_bytes=262144)
+    with ruta.open(encoding=cod, errors="replace", newline="") as f:
+        lineas = [f.readline() for _ in range(20)]
+    lineas = [ln for ln in lineas if ln]
+    if any(ln.strip().startswith("|") and ln.strip().endswith("|") for ln in lineas):
+        return [[ln.strip()] for ln in lineas]
+    try:
+        dialecto = csv.Sniffer().sniff("\n".join(lineas[-5:]), delimiters=",;\t|")
+    except csv.Error:
+        dialecto = csv.excel
+    return list(csv.reader(lineas, dialecto))
 
 
 def _columnas_origen(ruta: str | Path, extra: dict) -> list[str]:
@@ -157,6 +185,16 @@ def _aplicar_perfil_si_corresponde(
     if not perfil_req or confirmado_ui:
         return extra
 
+    if extra.get("saltar_filas") is None and not es_uri_sql(ruta):
+        # Reportes con filas de título (empresa, nombre del reporte, periodo) antes del encabezado.
+        ruta_p = Path(ruta)
+        if ruta_p.suffix.lower() in EXTENSIONES_TEXTO | EXTENSIONES_EXCEL:
+            filas = filas_crudas(ruta_p, extra.get("hoja"))
+            if filas and not (len(filas[0]) == 1 and str(filas[0][0]).strip().startswith("|")):
+                fila_enc = detectar_fila_encabezado(filas, list(definicion["columnas_requeridas"]))
+                if fila_enc > 0:
+                    extra["saltar_filas"] = fila_enc
+
     columnas = _columnas_origen(ruta, extra)
     if perfil_req == "auto":
         perfil, _ = detectar_perfil(columnas)
@@ -182,6 +220,8 @@ def _aplicar_perfil_si_corresponde(
             extra["debito_credito"] = prop["debito_credito"]
         elif prop["indicador_dc"]:
             extra["indicador_dc"] = prop["indicador_dc"]
+    if extra.get("rellenar_hacia_abajo") is None and prop.get("rellenar_hacia_abajo"):
+        extra["rellenar_hacia_abajo"] = True
     if "generar_linea" not in extra and prop["generar_linea"]:
         extra["generar_linea"] = True
     if "usuario_por_defecto" not in extra and prop["usuario_por_defecto"]:

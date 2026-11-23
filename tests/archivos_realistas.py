@@ -110,4 +110,49 @@ def generar_variantes(carpeta: Path) -> dict[str, dict]:
     salida.to_csv(ruta, index=False, sep=";")
     v["coma_decimal"] = {"ruta": ruta, "opciones": {"separador_decimal": ","}}
 
+    # 9. QuickBooks Online, reporte "Journal": títulos arriba, fecha y número SOLO en la primera línea de
+    #    cada transacción, Debit/Credit con "$" y miles, subtotal por transacción y TOTAL al final.
+    ruta = carpeta / "quickbooks_journal.csv"
+    with ruta.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["Empresa Demo, S.A."])
+        w.writerow(["Journal"])
+        w.writerow(["January - December 2025"])
+        w.writerow([])
+        w.writerow(["Date", "Transaction Type", "Num", "Name", "Memo/Description", "Account", "Debit", "Credit", "Created By"])
+
+        def dinero(x: float) -> str:
+            return f"${x:,.2f}" if x else ""
+
+        grupo: tuple | None = None
+        deb_g = cre_g = 0.0
+        tot_d = tot_c = 0.0
+        for fila in df.itertuples(index=False):
+            mm, dd, aa = fila.fecha[5:7], fila.fecha[8:10], fila.fecha[:4]
+            clave = (fila.asiento, fila.fecha)
+            if clave != grupo:
+                if grupo is not None:
+                    w.writerow(["", "", "", "", "", "", dinero(deb_g), dinero(cre_g), ""])
+                grupo, deb_g, cre_g = clave, 0.0, 0.0
+                cabecera = [f"{mm}/{dd}/{aa}", "Journal Entry", fila.asiento]
+            else:
+                cabecera = ["", "", ""]
+            deb, cre = max(fila.monto, 0.0), max(-fila.monto, 0.0)
+            deb_g, cre_g, tot_d, tot_c = deb_g + deb, cre_g + cre, tot_d + deb, tot_c + cre
+            # "Name" es el cliente/proveedor en QuickBooks: no debe tomarse como usuario
+            w.writerow(cabecera + ["Cliente Sintético", fila.descripcion, fila.cuenta, dinero(deb), dinero(cre), fila.usuario])
+        w.writerow(["", "", "", "", "", "", dinero(deb_g), dinero(cre_g), ""])
+        w.writerow(["TOTAL", "", "", "", "", "", dinero(tot_d), dinero(tot_c), ""])
+    v["quickbooks_journal"] = {
+        "ruta": ruta,
+        "opciones": {
+            "saltar_filas": 4,
+            "mapeo": {"Date": "fecha", "Num": "asiento", "Memo/Description": "descripcion", "Account": "cuenta",
+                      "Created By": "usuario"},
+            "debito_credito": ("Debit", "Credit"),
+            "rellenar_hacia_abajo": True,
+            "generar_linea": True,
+        },
+    }
+
     return v

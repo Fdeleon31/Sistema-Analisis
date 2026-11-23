@@ -425,16 +425,39 @@ def _extraer_lineas_qtpdf(ruta: Path) -> list[str]:
 
 def extraer_lineas_pdf(ruta: Path) -> list[str]:
     """Extrae líneas de texto de un PDF usando el parser Flate/Tj local y QtPdf como respaldo."""
+    return _extraer_lineas_pdf_con_metodo(ruta)[0]
+
+
+def _proporcion_legible(lineas: list[str]) -> float:
+    """Fracción de caracteres imprimibles. Un PDF con fuentes incrustadas (CID/Identity-H) leído sin su
+    tabla ToUnicode produce códigos de glifo como \x16\x14…, que no son texto."""
+    texto = "".join(lineas)
+    if not texto:
+        return 0.0
+    legibles = sum(1 for c in texto if c.isprintable() and not ("\x00" <= c <= "\x1f"))
+    return legibles / len(texto)
+
+
+def _lineas_con_fecha(lineas: list[str]) -> int:
+    return sum(1 for ln in lineas if RE_FECHA_INICIO.match(ln.strip()))
+
+
+def _extraer_lineas_pdf_con_metodo(ruta: Path) -> tuple[list[str], str]:
+    """Devuelve (líneas, método). Usa el parser local si su texto es legible; si no, QtPdf (PDFium),
+    que sí interpreta fuentes incrustadas. Si ninguno sirve, devuelve lo mejor que haya y el lector lo
+    reportará como error (nunca se descarta en silencio)."""
     tamano = ruta.stat().st_size
     if tamano > MAX_BYTES_PDF_TOTAL:
         raise ErrorSeguridad(
             f"El archivo PDF {ruta.name!r} excede el límite máximo permitido ({tamano:,} > {MAX_BYTES_PDF_TOTAL:,} bytes)."
         )
-    data = ruta.read_bytes()
-    lineas = _extraer_lineas_pdf_puro(data)
-    if lineas:
-        return lineas
-    return _extraer_lineas_qtpdf(ruta)
+    lineas = _extraer_lineas_pdf_puro(ruta.read_bytes())
+    if lineas and _proporcion_legible(lineas) >= 0.98 and _lineas_con_fecha(lineas) > 0:
+        return lineas, "pdf"
+    lineas_qt = _extraer_lineas_qtpdf(ruta)
+    if lineas_qt and _lineas_con_fecha(lineas_qt) >= _lineas_con_fecha(lineas):
+        return lineas_qt, "pdf (QtPdf)"
+    return lineas, "pdf"
 
 
 def _detectar_banco_y_cuenta(lineas: list[str]) -> tuple[str, str]:
@@ -536,11 +559,25 @@ def _parsear_lineas_extracto(lineas: list[str], nombre_archivo: str) -> tuple[li
     linea_n = 0
     ultima_fila: dict | None = None
     continuaciones = 0
+    saldo_previo: float | None = None
 
     for idx_raw, ln_raw in enumerate(lineas, start=1):
         ln = ln_raw.strip()
         if not ln:
             continue
+        m_si = RE_SALDO_INICIAL.search(ln)
+        if m_si and saldo_previo is None and not filas:
+            try:
+                val_si, etq_si = _parsear_monto_banco(m_si.group("monto"))
+            except ValueError:
+                val_si = None
+            if val_si is not None:
+                saldo_previo = -abs(val_si) if etq_si == "DB" else val_si
+                ultima_fila = None
+                continue
+        if RE_SALDO_FINAL.search(ln):
+            ultima_fila = None
+            continue  # lo usa _resumen_saldo_extracto para el cuadre
         m_f = RE_FECHA_INICIO.match(ln)
         if not m_f:
             if _es_linea_movimiento_roto(ln):
@@ -595,6 +632,9 @@ def _parsear_lineas_extracto(lineas: list[str], nombre_archivo: str) -> tuple[li
                 deb, cred = 0.0, abs(val_mov)
             elif val_mov < 0:
                 deb, cred = abs(val_mov), 0.0
+            elif saldo_previo is not None and abs(round(saldo_previo - abs(val_mov), 2) - saldo) <= 0.005:
+                # Una sola columna de monto sin signo: la dirección sale del saldo corrido.
+                deb, cred = abs(val_mov), 0.0
             else:
                 deb, cred = 0.0, abs(val_mov)
             monto = round(cred - deb, 2)
@@ -623,6 +663,7 @@ def _parsear_lineas_extracto(lineas: list[str], nombre_archivo: str) -> tuple[li
         filas.append(fila)
         ultima_fila = fila
         continuaciones = 0
+        saldo_previo = saldo
     return filas, errores, omitidas
 
 
@@ -693,6 +734,15 @@ def _procesar_pdf_en_lote(
     resumenes_saldos: list[dict],
 ) -> int:
     f_pdf, err_pdf, om = _parsear_lineas_extracto(lineas, nombre)
+    if not f_pdf:
+        err_pdf.append({
+            "archivo": nombre,
+            "linea": 0,
+            "error": (
+                "No se reconoció ningún movimiento en este PDF (texto ilegible, escaneado o formato no soportado). "
+                f"Legibilidad del texto extraído: {_proporcion_legible(lineas):.0%}."
+            ),
+        })
     filas_totales.extend(f_pdf)
     errores_totales.extend(err_pdf)
     resumenes_saldos.append(_resumen_saldo_extracto(lineas, f_pdf, nombre))
@@ -714,6 +764,7 @@ def leer_estado_cuenta(ruta: str | Path) -> LecturaExtracto:
     omitidas_tot = 0
     huella = hashlib.sha256()
     n_archivos = 0
+    metodos: set[str] = set()
 
     if ruta.is_file() and ruta.suffix.lower() == ".zip":
         import tempfile
@@ -729,25 +780,35 @@ def leer_estado_cuenta(ruta: str | Path) -> LecturaExtracto:
                 huella.update(hashlib.sha256(raw).digest())
                 tmp_pdf = Path(tmp) / f"{n_archivos:05d}_{nombre_archivo_seguro(nombre, 'extracto.pdf')}"
                 tmp_pdf.write_bytes(raw)
+                lineas_pdf, metodo_pdf = _extraer_lineas_pdf_con_metodo(tmp_pdf)
+                metodos.add(metodo_pdf)
                 omitidas_tot += _procesar_pdf_en_lote(
-                    extraer_lineas_pdf(tmp_pdf), nombre, filas_totales, errores_totales, resumenes_saldos
+                    lineas_pdf, nombre, filas_totales, errores_totales, resumenes_saldos
                 )
     else:
         for nombre, p_pdf in _fuentes_pdf(ruta):
             n_archivos += 1
             huella.update(hashlib.sha256(p_pdf.read_bytes()).digest())
+            lineas_pdf, metodo_pdf = _extraer_lineas_pdf_con_metodo(p_pdf)
+            metodos.add(metodo_pdf)
             omitidas_tot += _procesar_pdf_en_lote(
-                extraer_lineas_pdf(p_pdf), nombre, filas_totales, errores_totales, resumenes_saldos
+                lineas_pdf, nombre, filas_totales, errores_totales, resumenes_saldos
             )
 
     df = pd.DataFrame(filas_totales, columns=COLUMNAS_EXTRACTO)
+    if n_archivos and df.empty:
+        raise ValueError(
+            f"No se reconoció ningún movimiento bancario en {ruta.name}: "
+            + "; ".join(e["error"] for e in errores_totales if e.get("linea") == 0)[:400]
+            + " Exporta el estado de cuenta en CSV/Excel desde la banca en línea o revisa que el PDF no sea escaneado."
+        )
     return LecturaExtracto(
         movimientos=df,
         errores=errores_totales,
         lineas_omitidas=omitidas_tot,
         archivos=n_archivos,
         sha256=huella.hexdigest(),
-        metodo="pdf",
+        metodo=", ".join(sorted(metodos)) or "pdf",
         resumen_saldos=resumenes_saldos,
     )
 

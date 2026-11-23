@@ -46,7 +46,6 @@ from ia.copiloto import (  # noqa: E402
     proponer_consulta_sql,
 )
 from motor.bitacora import Bitacora, _usuario_actual  # noqa: E402
-from motor.cripto import verificar_sello_corrida  # noqa: E402
 from motor.ejecutor import CRITERIOS_ASIENTO, NOMBRES_CRITERIOS  # noqa: E402
 from motor.diagnostico import diagnostico_a_dataframe  # noqa: E402
 from motor.privacidad import detectar_carpeta_sincronizada  # noqa: E402
@@ -56,6 +55,7 @@ from motor.seguridad import (  # noqa: E402
     nombre_archivo_seguro,
 )
 from motor.usuarios import (  # noqa: E402
+    verificar_sello_anclado,
     PERFIL_ADMIN,
     PERFIL_PREPARADOR,
     PERFILES_VALIDOS,
@@ -1488,17 +1488,21 @@ def _render_portafolio_y_roles() -> None:
                             exigir_segregacion=exigir_seg,
                             sesion=sesion_web,
                             ventana_archivo_dias=ventana_dias,
+                            regenerar_cedula=(lambda: actualizar_cedula_corrida(corrida_obj)) if corrida_obj else None,
                         )
-                        if corrida_obj:
-                            actualizar_cedula_corrida(corrida_obj)
                         st.rerun()
                     except ValueError as e:
                         st.error(str(e))
             elif bloqueado:
                 if (carpeta_c / "sello.json").exists():
-                    sello_res = verificar_sello_corrida(carpeta_c)
-                    if sello_res.get("valido"):
+                    sello_res = verificar_sello_anclado(carpeta_c, RAIZ)
+                    if sello_res.get("valido") and sello_res.get("firmante_verificado"):
                         st.success(f"Sello Ed25519 verificado ({sello_res.get('huella_clave', '')[:12]}…).")
+                    elif sello_res.get("valido"):
+                        st.warning(
+                            "Sello íntegro, pero el firmante no se pudo verificar: no hay registro de claves "
+                            "(activa el control de acceso para anclar las firmas)."
+                        )
                     else:
                         st.error(f"Sello criptográfico inválido: {sello_res.get('motivo')}")
                 motivo_r = st.text_input("Motivo para reabrir el papel cerrado", key="pf_motivo_reab")

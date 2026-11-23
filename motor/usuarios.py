@@ -636,6 +636,26 @@ class GestorUsuarios:
         ahora = _ahora_utc()
         return [self._sanitizar_usuario(reg, ahora=ahora) for reg in datos.get("usuarios", [])]
 
+    def registro_claves(self) -> dict[str, dict[str, Any]]:
+        """Registro público de claves de firma: {huella: {usuario, nombre_completo, perfil, rol_auditoria, activo, clave_publica_b64}}.
+
+        Sirve de ancla para `verificar_sello_corrida(..., claves_registradas=...)` y se puede exportar
+        a un auditor externo (no contiene hashes de contraseña ni llaves privadas).
+        """
+        if not self.ruta_usuarios.exists():
+            return {}
+        registro: dict[str, dict[str, Any]] = {}
+        for u in self.listar_usuarios():
+            registro[u["huella_clave"]] = {
+                "usuario": u["usuario"],
+                "nombre_completo": u["nombre_completo"],
+                "perfil": u["perfil"],
+                "rol_auditoria": u.get("rol_auditoria"),
+                "activo": u["activo"],
+                "clave_publica_b64": u["clave_publica_b64"],
+            }
+        return registro
+
     def leer_bitacora_accesos(self) -> tuple[list[dict[str, Any]], bool]:
         """Lee los eventos de `bitacora_accesos.jsonl` y verifica su cadena SHA-256."""
         if not self.ruta_bitacora.exists():
@@ -646,3 +666,24 @@ class GestorUsuarios:
     def puede_firmar_rol(self, sesion: SesionAutenticada, rol: str) -> bool:
         """Verifica si una sesión autenticada puede firmar el rol de auditoría solicitado."""
         return puede_firmar_rol(sesion, rol)
+
+
+def verificar_sello_anclado(carpeta: str | Path, ruta_base: str | Path | None = None) -> dict[str, Any]:
+    """Verifica el sello de una corrida anclando la clave al registro local de usuarios, si existe.
+
+    Si la firma tiene usuarios configurados, una clave no registrada invalida el sello. Si no los tiene,
+    el resultado queda con `firmante_verificado = None` para que la interfaz lo advierta.
+    """
+    from motor.cripto import verificar_sello_corrida
+
+    registro = GestorUsuarios(ruta_base).registro_claves()
+    return verificar_sello_corrida(carpeta, claves_registradas=registro or None)
+
+
+def texto_estado_sello(res: dict[str, Any]) -> str:
+    """Etiqueta corta y honesta del resultado de verificación de sello."""
+    if not res.get("valido"):
+        return "INVÁLIDO"
+    if res.get("firmante_verificado"):
+        return "VÁLIDO"
+    return "ÍNTEGRO, FIRMANTE SIN VERIFICAR"

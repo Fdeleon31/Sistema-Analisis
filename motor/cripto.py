@@ -54,7 +54,9 @@ _AES_GCM_NONCE_BYTES = 12
 _AES_GCM_TAG_BYTES = 16
 _CRYPTPROTECT_UI_FORBIDDEN = 0x1
 _AAD_CLAVE_PRIVADA = b"folio-ed25519-v1"
-_ARCHIVOS_MANIFIESTO = ("bitacora.jsonl", "cedula.xlsx", "revisiones.json")
+_ARCHIVOS_MANIFIESTO = ("bitacora.jsonl", "cedula.xlsx", "revisiones.json")  # mínimo histórico (sellos versión 1)
+_ARCHIVOS_FUERA_DE_SELLO = ("sello.json",)
+VERSION_SELLO = 2  # v2: el manifiesto cubre todos los archivos de la carpeta y se rechazan archivos agregados
 
 
 def _validar_bytes(valor: Any, nombre: str, largo: int | None = None) -> bytes:
@@ -728,17 +730,31 @@ def _json_canonico(datos: dict[str, Any]) -> bytes:
     return json.dumps(datos, sort_keys=True, ensure_ascii=False).encode("utf-8")
 
 
+def _archivos_corrida(carp: Path) -> list[str]:
+    """Todos los archivos de la carpeta de corrida (rutas relativas con '/'), salvo el propio sello."""
+    nombres: list[str] = []
+    if not carp.exists():
+        return nombres
+    for ruta in sorted(carp.rglob("*")):
+        if not ruta.is_file() or ruta.is_symlink():
+            continue
+        rel = ruta.relative_to(carp).as_posix()
+        if rel in _ARCHIVOS_FUERA_DE_SELLO or rel.endswith(".tmp"):
+            continue
+        nombres.append(rel)
+    return nombres
+
+
 def construir_manifiesto_corrida(carpeta: str | Path) -> dict[str, Any]:
-    """Construye el manifiesto de integridad SHA-256 de los artefactos de una corrida."""
+    """Construye el manifiesto de integridad SHA-256 de TODOS los archivos de una corrida (salvo sello.json)."""
     carp = Path(carpeta)
     archivos: dict[str, dict[str, Any]] = {}
-    for nombre in _ARCHIVOS_MANIFIESTO:
+    for nombre in _archivos_corrida(carp):
         ruta = carp / nombre
-        if ruta.exists() and ruta.is_file():
-            archivos[nombre] = {
-                "sha256": _sha256_archivo(ruta),
-                "bytes": ruta.stat().st_size,
-            }
+        archivos[nombre] = {
+            "sha256": _sha256_archivo(ruta),
+            "bytes": ruta.stat().st_size,
+        }
     ultimo_hash, bitacora_integra = _estado_bitacora_actual(carp / "bitacora.jsonl")
     return {
         "archivos": archivos,
@@ -778,7 +794,7 @@ def sellar_corrida(
 
     firma = firmar_ed25519(sem_b, _json_canonico(manifiesto))
     sello = {
-        "version": 1,
+        "version": VERSION_SELLO,
         "algoritmo": "Ed25519",
         "usuario": usuario,
         "rol": rol,
@@ -793,8 +809,19 @@ def sellar_corrida(
     return ruta_sello
 
 
-def verificar_sello_corrida(carpeta: str | Path, clave_publica_esperada: bytes | None = None) -> dict[str, Any]:
-    """Verifica firma Ed25519 de `sello.json`, hashes en disco de cada archivo y cadena de bitácora."""
+def verificar_sello_corrida(
+    carpeta: str | Path,
+    clave_publica_esperada: bytes | None = None,
+    claves_registradas: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Verifica firma Ed25519 de `sello.json`, hashes en disco de cada archivo y cadena de bitácora.
+
+    La firma por sí sola solo prueba que alguien con *alguna* clave selló la carpeta. Para saber
+    QUIÉN la selló hay que anclar la clave: `clave_publica_esperada` (una clave concreta) o
+    `claves_registradas` ({huella: {"usuario": ..., ...}}, p. ej. de `GestorUsuarios.registro_claves()`).
+    El resultado trae `firmante_verificado`: True (clave anclada), False (clave desconocida o de otro
+    usuario: el sello se rechaza) o None (no se entregó ancla: firma íntegra pero firmante sin verificar).
+    """
     carp = Path(carpeta)
     ruta_sello = carp / "sello.json"
     base_res = {
@@ -836,6 +863,8 @@ def verificar_sello_corrida(carpeta: str | Path, clave_publica_esperada: bytes |
         "usuario": usuario,
         "rol": rol,
         "fecha_utc": str(sello.get("fecha_utc", "")),
+        "firmante_verificado": None,
+        "version_sello": sello.get("version", 1),
     }
 
     try:
@@ -866,6 +895,25 @@ def verificar_sello_corrida(carpeta: str | Path, clave_publica_esperada: bytes |
             res["motivo"] = "La clave pública del sello no coincide con la clave esperada."
             return res
         detalle["clave_coincide"] = True
+        res["firmante_verificado"] = True
+
+    if claves_registradas is not None:
+        registro = claves_registradas.get(huella_real)
+        if registro is None:
+            res["firmante_verificado"] = False
+            res["motivo"] = (
+                f"La clave que firmó el sello (huella {huella_real[:16]}…) no está registrada en la firma: "
+                "el sello pudo ser emitido por alguien distinto del usuario declarado."
+            )
+            return res
+        usuario_reg = str(registro.get("usuario", ""))
+        if usuario_reg and usuario_reg.strip().lower() != usuario.strip().lower():
+            res["firmante_verificado"] = False
+            res["motivo"] = (
+                f"El sello declara al usuario '{usuario}' pero la clave registrada pertenece a '{usuario_reg}'."
+            )
+            return res
+        res["firmante_verificado"] = True
 
     firma_ok = verificar_ed25519(pub_b, _json_canonico(manifiesto), firma_b)
     detalle["firma_valida"] = firma_ok
@@ -888,8 +936,12 @@ def verificar_sello_corrida(carpeta: str | Path, clave_publica_esperada: bytes |
         res["motivo"] = "El manifiesto de archivos en sello.json es inválido."
         return res
 
+    carp_resuelta = carp.resolve()
     for nombre, meta in archivos_sellados.items():
         ruta = carp / nombre
+        if carp_resuelta not in ruta.resolve().parents:
+            res["motivo"] = f"El manifiesto contiene una ruta fuera de la carpeta de la corrida: {nombre!r}."
+            return res
         if not ruta.exists() or not ruta.is_file():
             detalle["archivos"][nombre] = "ausente"
             res["motivo"] = f"El archivo sellado '{nombre}' fue eliminado o movido."
@@ -902,6 +954,19 @@ def verificar_sello_corrida(carpeta: str | Path, clave_publica_esperada: bytes |
             return res
         detalle["archivos"][nombre] = "integro"
 
+    if int(sello.get("version", 1) or 1) >= 2:
+        agregados = [n for n in _archivos_corrida(carp) if n not in archivos_sellados]
+        if agregados:
+            for n in agregados:
+                detalle["archivos"][n] = "agregado"
+            res["motivo"] = f"Se agregaron archivos después del sellado: {', '.join(agregados[:5])}."
+            return res
+
     res["valido"] = True
     res["motivo"] = "Sello criptográfico Ed25519 y hashes SHA-256 verificados correctamente."
+    if res["firmante_verificado"] is None:
+        res["motivo"] += (
+            " Atención: el firmante NO está verificado (no se comparó la clave con un registro de claves),"
+            " así que cualquiera pudo haber re-sellado la carpeta."
+        )
     return res

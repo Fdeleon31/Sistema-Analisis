@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .bitacora import Bitacora
 from .cripto import firmar_ed25519, sellar_corrida
@@ -119,8 +119,13 @@ def firmar_papel_trabajo(
     exigir_segregacion: bool = False,
     sesion: Any = None,
     ventana_archivo_dias: int = 60,
+    regenerar_cedula: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
-    """Estampa firma de Preparador, Revisor o Socio cumpliendo controles de calidad NIA 220 y sellado Ed25519."""
+    """Estampa firma de Preparador, Revisor o Socio cumpliendo controles de calidad NIA 220 y sellado Ed25519.
+
+    `regenerar_cedula` (opcional) se llama después de guardar la firma y ANTES de sellar, para que la cédula
+    con las firmas quede dentro del sello. Regenerarla después del sello la deja marcada como alterada.
+    """
     if rol not in ROLES_FIRMA:
         raise ValueError(f"Rol inválido: {rol!r}. Usa {', '.join(ROLES_FIRMA)}.")
     aud_limpio = (auditor or "").strip()
@@ -216,6 +221,8 @@ def firmar_papel_trabajo(
         estado["ventana_archivo_dias"] = int(ventana_archivo_dias)
 
     guardar_revisiones(carpeta, estado)
+    if regenerar_cedula is not None:
+        regenerar_cedula()
 
     if rol == "Socio" and sesion is not None and getattr(sesion, "semilla_privada_bytes", None):
         sellar_corrida(

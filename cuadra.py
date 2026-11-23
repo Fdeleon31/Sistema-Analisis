@@ -51,6 +51,22 @@ from motor.sintetico import generar, generar_diario_asientos, generar_estado_cue
 RAIZ = raiz_trabajo()
 
 
+def _registro_claves_para_verificar(ruta: Path | None) -> tuple[dict | None, str]:
+    """Carga el ancla de claves para `verificar`: archivo exportado o seguridad/usuarios.json local."""
+    if ruta is not None:
+        datos = json.loads(Path(ruta).read_text(encoding="utf-8"))
+        claves = datos.get("claves") if isinstance(datos, dict) else None
+        if not isinstance(claves, dict):
+            raise ErrorSeguridad(f"{ruta} no es un registro de claves de Folio Auditor.")
+        return claves, str(ruta)
+    from motor.usuarios import GestorUsuarios
+
+    registro = GestorUsuarios(RAIZ).registro_claves()
+    if registro:
+        return registro, "seguridad/usuarios.json (local)"
+    return None, "ninguno (usa --claves con el registro exportado por la firma)"
+
+
 def _mapeo(texto: str | None) -> dict[str, str]:
     if not texto:
         return {}
@@ -213,6 +229,10 @@ def main(argv: list[str] | None = None) -> int:
 
     ver = sub.add_parser("verificar", help="Verifica integridad criptográfica (Ed25519 + SHA-256) de una carpeta de corrida")
     ver.add_argument("carpeta", type=Path, help="Ruta de la carpeta de salida a verificar")
+    ver.add_argument(
+        "--claves", type=Path,
+        help="Registro de claves de la firma (JSON de 'seguridad --exportar-claves'). Por defecto usa seguridad/usuarios.json",
+    )
 
     seg = sub.add_parser("seguridad", help="Controles de ciberseguridad: SAST, SBOM, lockfile, bóveda, ACLs y anonimización")
     seg.add_argument("--escanear", action="store_true", help="Ejecuta el escaneo estático SAST/secretos/configuración")
@@ -228,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
     seg.add_argument("--aplicar-acl", type=Path, help="Restringe permisos NTFS/POSIX de la ruta al usuario actual")
     seg.add_argument("--purgar-expiradas", type=Path, help="Detecta (y elimina con --ejecutar-purga) corridas expiradas")
     seg.add_argument("--dias-retencion", type=int, default=1825, help="Días de retención para --purgar-expiradas (defecto 1825)")
+    seg.add_argument("--exportar-claves", type=Path, help="Exporta el registro público de claves de firma (huellas) a un JSON para el auditor externo")
     seg.add_argument("--ejecutar-purga", action="store_true", help="Elimina efectivamente las corridas detectadas por --purgar-expiradas")
 
     cop = sub.add_parser("copiloto", help="Traduce una pregunta en español a SQL visible y la ejecuta si se aprueba")
@@ -305,12 +326,22 @@ def main(argv: list[str] | None = None) -> int:
         elif args.comando == "verificar":
             carpeta_ver = Path(args.carpeta)
             if (carpeta_ver / "sello.json").exists():
-                res = verificar_sello_corrida(carpeta_ver)
-                print(f"\nVerificación de sello Ed25519 ({carpeta_ver}): {'VÁLIDO' if res['valido'] else 'INVÁLIDO'}")
+                registro, origen_registro = _registro_claves_para_verificar(args.claves)
+                res = verificar_sello_corrida(carpeta_ver, claves_registradas=registro)
+                if not res["valido"]:
+                    estado = "INVÁLIDO"
+                elif res["firmante_verificado"]:
+                    estado = "VÁLIDO"
+                else:
+                    estado = "ÍNTEGRO, FIRMANTE SIN VERIFICAR"
+                print(f"\nVerificación de sello Ed25519 ({carpeta_ver}): {estado}")
                 print(f"Motivo: {res['motivo']}")
                 if res.get("huella_clave"):
                     print(f"Firmante: {res.get('usuario')} ({res.get('rol')}) · Huella {res['huella_clave'][:16]}…")
-                return 0 if res["valido"] else 1
+                print(f"Registro de claves usado: {origen_registro}")
+                if not res["valido"]:
+                    return 1
+                return 0 if res["firmante_verificado"] else 2
             ruta_bit = carpeta_ver / "bitacora.jsonl"
             if not ruta_bit.exists():
                 print(f"\nNo se encontró bitacora.jsonl ni sello.json en {carpeta_ver}\n")
@@ -321,7 +352,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.comando == "seguridad":
             acciones = [
                 args.escanear, args.sbom, args.lockfile, args.entorno, args.anonimizar,
-                args.cifrar, args.descifrar, args.aplicar_acl, args.purgar_expiradas,
+                args.cifrar, args.descifrar, args.aplicar_acl, args.purgar_expiradas, args.exportar_claves,
             ]
             if not any(acciones):
                 print("\nUsa --escanear, --sbom, --lockfile, --entorno, --anonimizar, --cifrar, --descifrar, --aplicar-acl o --purgar-expiradas.\n")
@@ -335,6 +366,20 @@ def main(argv: list[str] | None = None) -> int:
                     codigo_seg = 1
                 else:
                     print("Escaneo estático limpio: 0 hallazgos.")
+            if args.exportar_claves is not None:
+                from motor.usuarios import GestorUsuarios
+
+                registro = GestorUsuarios(RAIZ).registro_claves()
+                if not registro:
+                    print("No hay usuarios registrados (seguridad/usuarios.json); nada que exportar.")
+                    codigo_seg = 1
+                else:
+                    args.exportar_claves.parent.mkdir(parents=True, exist_ok=True)
+                    args.exportar_claves.write_text(
+                        json.dumps({"tipo": "registro_claves_folio", "version": 1, "claves": registro}, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                    print(f"Registro de {len(registro)} clave(s) exportado en {args.exportar_claves}. Entrégalo al auditor externo para `verificar --claves`.")
             if args.sbom is not None:
                 sbom = generar_sbom_cyclonedx(args.sbom)
                 print(f"SBOM CycloneDX {sbom['specVersion']} generado en {args.sbom} ({len(sbom['components'])} componentes).")

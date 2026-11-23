@@ -100,7 +100,7 @@ from ia.copiloto import (  # noqa: E402
     proponer_consulta_sql,
 )
 from motor.bitacora import Bitacora, _usuario_actual  # noqa: E402
-from motor.cripto import verificar_sello_corrida  # noqa: E402
+from motor.usuarios import texto_estado_sello, verificar_sello_anclado  # noqa: E402
 from motor.diagnostico import diagnostico_a_dataframe  # noqa: E402
 from motor.ejecutor import CRITERIOS_ASIENTO, NOMBRES_CRITERIOS  # noqa: E402
 from motor.exportador import detalle_resultado  # noqa: E402
@@ -2281,7 +2281,7 @@ class VistaPortafolioWidget(QWidget):
             ventana_dias=int(rev.get("ventana_archivo_dias") or 60),
         )
         if ruta_sello.exists():
-            res_sello = verificar_sello_corrida(carpeta)
+            res_sello = verificar_sello_anclado(carpeta, RAIZ)
             sello_ok = bool(res_sello.get("valido"))
             sub_nia = (
                 f"SELLO Ed25519 VÁLIDO · NIA 230: {est_nia['dias_restantes']}d rest."
@@ -2343,9 +2343,13 @@ class VistaPortafolioWidget(QWidget):
         _, auditor, _, _ = self._proveedor_sesion()
         return Bitacora(self._carpeta_activa / "bitacora.jsonl", usuario=auditor)
 
-    def _post_cambio_revision(self) -> None:
+    def _regenerar_cedula_activa(self) -> None:
         if self._corrida_obj and self._carpeta_activa and self._corrida_obj.carpeta == self._carpeta_activa:
             actualizar_cedula_corrida(self._corrida_obj)
+
+    def _post_cambio_revision(self, regenerar: bool = True) -> None:
+        if regenerar:
+            self._regenerar_cedula_activa()
         if self._carpeta_activa:
             self._cargar_panel_revision(self._carpeta_activa)
         self.refrescar_portafolio()
@@ -2417,8 +2421,9 @@ class VistaPortafolioWidget(QWidget):
                 exigir_segregacion=exigir_seg,
                 sesion=sesion_act,
                 ventana_archivo_dias=ventana_dias,
+                regenerar_cedula=self._regenerar_cedula_activa,
             )
-            self._post_cambio_revision()
+            self._post_cambio_revision(regenerar=False)
         except ValueError as exc:
             QMessageBox.warning(self, "Control de calidad NIA 220", str(exc))
 
@@ -2467,9 +2472,9 @@ class VistaPortafolioWidget(QWidget):
             return
         carp = self._carpeta_activa
         if (carp / "sello.json").exists():
-            res = verificar_sello_corrida(carp)
+            res = verificar_sello_anclado(carp, RAIZ)
             detalle = (
-                f"Estado: {'VÁLIDO' if res.get('valido') else 'INVÁLIDO'}\n"
+                f"Estado: {texto_estado_sello(res)}\n"
                 f"Motivo: {res.get('motivo')}\n"
                 f"Firmante: {res.get('usuario', '')} ({res.get('rol', '')})\n"
                 f"Huella Ed25519: {res.get('huella_clave', '')}"

@@ -238,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     seg.add_argument("--escanear", action="store_true", help="Ejecuta el escaneo estático SAST/secretos/configuración")
     seg.add_argument("--sbom", type=Path, help="Genera el SBOM CycloneDX 1.5 en la ruta indicada")
     seg.add_argument("--lockfile", type=Path, help="Genera el archivo requirements.lock del entorno activo")
+    seg.add_argument("--hashes-lockfile", type=Path, help="Agrega hashes SHA-256 de PyPI a un requirements.lock (requiere internet una vez)")
     seg.add_argument("--entorno", action="store_true", help="Evalúa la postura local de seguridad y nube (Ley 81)")
     seg.add_argument("--anonimizar", type=Path, help="Exporta un diagnóstico técnico anonimizado de una corrida")
     seg.add_argument("--salida", type=Path, help="Archivo JSON de salida para --anonimizar")
@@ -353,6 +354,7 @@ def main(argv: list[str] | None = None) -> int:
             acciones = [
                 args.escanear, args.sbom, args.lockfile, args.entorno, args.anonimizar,
                 args.cifrar, args.descifrar, args.aplicar_acl, args.purgar_expiradas, args.exportar_claves,
+                args.hashes_lockfile,
             ]
             if not any(acciones):
                 print("\nUsa --escanear, --sbom, --lockfile, --entorno, --anonimizar, --cifrar, --descifrar, --aplicar-acl o --purgar-expiradas.\n")
@@ -366,6 +368,12 @@ def main(argv: list[str] | None = None) -> int:
                     codigo_seg = 1
                 else:
                     print("Escaneo estático limpio: 0 hallazgos.")
+            if args.hashes_lockfile is not None:
+                from herramientas.seguridad_build import agregar_hashes_lockfile
+
+                ruta_h = agregar_hashes_lockfile(args.hashes_lockfile)
+                n_hash = ruta_h.read_text(encoding="utf-8").count("--hash=sha256:")
+                print(f"Hashes SHA-256 agregados a {ruta_h} ({n_hash} archivos). Instala con: pip install --require-hashes -r {ruta_h.name}")
             if args.exportar_claves is not None:
                 from motor.usuarios import GestorUsuarios
 

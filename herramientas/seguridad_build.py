@@ -149,6 +149,9 @@ def generar_sbom_cyclonedx(salida: str | Path | None = None) -> dict[str, Any]:
     return sbom
 
 
+_RE_PIN = re.compile(r"^([A-Za-z0-9_.\-]+)==([^\s;\\]+)")
+
+
 def generar_lockfile_entorno(salida: str | Path) -> Path:
     """Escribe un archivo requirements.lock ordenado alfabéticamente desde las distribuciones activas."""
     destino = Path(salida)
@@ -158,10 +161,84 @@ def generar_lockfile_entorno(salida: str | Path) -> Path:
         f"# Fecha UTC: {_timestamp_utc_iso()}",
         "# Regenerar con: .\\.venv\\Scripts\\python.exe herramientas\\seguridad_build.py --lockfile requirements.lock",
     ]
+    previos = _hashes_en_lockfile(destino) if destino.exists() else {}
+    sin_hash: list[str] = []
+    cuerpo: list[str] = []
     for nombre, version in _distribuciones_entorno():
-        lineas.append(f"{nombre}=={version}")
-    destino.write_text("\n".join(lineas) + "\n", encoding="utf-8", newline="\n")
+        hashes = previos.get((nombre.lower().replace("_", "-"), version), [])
+        if not hashes:
+            cuerpo.append(f"{nombre}=={version}")
+            sin_hash.append(f"{nombre}=={version}")
+            continue
+        cuerpo.append(f"{nombre}=={version} \\")
+        for i, h in enumerate(hashes):
+            cuerpo.append(f"    --hash=sha256:{h}" + (" \\" if i < len(hashes) - 1 else ""))
+    if sin_hash and previos:
+        lineas.append(
+            f"# FALTAN HASHES para {len(sin_hash)} versión(es) nueva(s); con internet ejecuta: "
+            "python cuadra.py seguridad --hashes-lockfile requirements.lock"
+        )
+    destino.write_text("\n".join(lineas + cuerpo) + "\n", encoding="utf-8", newline="\n")
     return destino
+
+
+def _hashes_en_lockfile(ruta: Path) -> dict[tuple[str, str], list[str]]:
+    """{(nombre normalizado, versión): [hashes]} de un requirements.lock existente."""
+    resultado: dict[tuple[str, str], list[str]] = {}
+    actual: tuple[str, str] | None = None
+    for linea in ruta.read_text(encoding="utf-8").splitlines():
+        texto = linea.strip().rstrip("\\").strip()
+        m = _RE_PIN.match(texto)
+        if m:
+            actual = (m.group(1).lower().replace("_", "-"), m.group(2))
+            resultado.setdefault(actual, [])
+        elif texto.startswith("--hash=sha256:") and actual is not None:
+            resultado[actual].append(texto.split(":", 1)[1])
+    return resultado
+
+
+
+
+def agregar_hashes_lockfile(
+    ruta: str | Path,
+    obtener_hashes: Any = None,
+) -> Path:
+    """Agrega `--hash=sha256:...` a cada versión fijada de requirements.lock (sin cambiar las versiones).
+
+    Requiere internet una sola vez (consulta la API JSON de PyPI); después la instalación se hace con
+    `pip install --require-hashes -r requirements.lock` y pip rechaza cualquier archivo cuyo hash no coincida.
+    `obtener_hashes(nombre, version) -> list[str]` permite inyectar la fuente (pruebas sin red).
+    """
+    destino = Path(ruta)
+    if obtener_hashes is None:
+        obtener_hashes = _hashes_pypi
+    salida: list[str] = []
+    for linea in destino.read_text(encoding="utf-8").splitlines():
+        if linea.strip().startswith("--hash=") or linea.strip() == "\\":
+            continue  # se regeneran
+        m = _RE_PIN.match(linea.strip())
+        if not m:
+            salida.append(linea.rstrip(" \\"))
+            continue
+        nombre, version = m.groups()
+        hashes = sorted(set(obtener_hashes(nombre, version)))
+        if not hashes:
+            raise RuntimeError(f"PyPI no devolvió archivos para {nombre}=={version}.")
+        salida.append(f"{nombre}=={version} \\")
+        for i, h in enumerate(hashes):
+            fin = " \\" if i < len(hashes) - 1 else ""
+            salida.append(f"    --hash=sha256:{h}{fin}")
+    destino.write_text("\n".join(salida) + "\n", encoding="utf-8", newline="\n")
+    return destino
+
+
+def _hashes_pypi(nombre: str, version: str) -> list[str]:
+    import urllib.request
+
+    url = f"https://pypi.org/pypi/{nombre}/{version}/json"
+    with urllib.request.urlopen(url, timeout=60) as resp:  # noqa: S310 (URL fija de PyPI, HTTPS)
+        datos = json.load(resp)
+    return [f["digests"]["sha256"] for f in datos.get("urls", []) if f.get("digests", {}).get("sha256")]
 
 
 def _sha256_archivo(ruta: Path) -> str:

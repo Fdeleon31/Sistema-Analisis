@@ -5,8 +5,17 @@ cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
     echo Preparando entorno por primera vez...
     py -m venv .venv || python -m venv .venv
-    ".venv\Scripts\python.exe" -m pip install --upgrade pip
-    ".venv\Scripts\python.exe" -m pip install -r requirements.txt
+    REM Versiones fijas y hashes SHA-256 verificados: pip rechaza cualquier paquete alterado.
+    ".venv\Scripts\python.exe" -m pip install --require-hashes -r requirements.lock
+    if errorlevel 1 (
+        echo.
+        echo No se pudo instalar con requirements.lock ^(versiones y hashes verificados^).
+        echo Revisa tu version de Python ^(se probo con 3.12^) o regenera el lock con hashes:
+        echo   python cuadra.py seguridad --lockfile requirements.lock --hashes-lockfile requirements.lock
+        rmdir /s /q .venv
+        pause
+        exit /b 1
+    )
 )
 if /I "%~1"=="web" (
     ".venv\Scripts\python.exe" -m streamlit run app\inicio.py --server.address 127.0.0.1 --server.enableXsrfProtection true --server.enableCORS false --server.maxUploadSize 4096 --browser.gatherUsageStats false

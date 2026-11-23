@@ -266,3 +266,24 @@ def test_empaquetar_exe_y_verificar_seguridad_contienen_controles():
     assert "requirements.lock" in ps1
     assert "bandit" in ps1
     assert "pip-audit" in ps1
+
+
+def test_hashes_lockfile_sin_red_y_conservados_al_regenerar(tmp_path, monkeypatch):
+    """Esperado por diseño: --hash por versión fijada, sin cambiar versiones; regenerar conserva los hashes."""
+    from herramientas import seguridad_build as sb
+
+    lock = tmp_path / "requirements.lock"
+    lock.write_text("# cabecera\nduckdb==2.0.1\npandas==3.1.1\n", encoding="utf-8")
+    falsos = {("duckdb", "2.0.1"): ["b" * 64, "a" * 64], ("pandas", "3.1.1"): ["c" * 64]}
+    sb.agregar_hashes_lockfile(lock, obtener_hashes=lambda n, v: falsos[(n, v)])
+    texto = lock.read_text(encoding="utf-8")
+    assert "duckdb==2.0.1 \\\n    --hash=sha256:" + "a" * 64 + " \\\n    --hash=sha256:" + "b" * 64 + "\n" in texto
+    assert "pandas==3.1.1 \\\n    --hash=sha256:" + "c" * 64 + "\n" in texto
+
+    # Regenerar desde el entorno conserva hashes de versiones iguales y avisa las nuevas
+    monkeypatch.setattr(sb, "_distribuciones_entorno", lambda: [("duckdb", "2.0.1"), ("pandas", "3.2.0")])
+    sb.generar_lockfile_entorno(lock)
+    texto = lock.read_text(encoding="utf-8")
+    assert "--hash=sha256:" + "a" * 64 in texto
+    assert "pandas==3.2.0\n" in texto
+    assert "FALTAN HASHES para 1" in texto

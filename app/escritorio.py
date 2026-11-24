@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -2453,11 +2454,13 @@ class VistaPortafolioWidget(QWidget):
         menu = QMenu(self)
         act_ver = menu.addAction("Verificar sello Ed25519 y cadena SHA-256")
         act_cif = menu.addAction("Cifrar corrida en bóveda (Windows DPAPI)")
+        act_cif_pwd = menu.addAction("Cifrar corrida con contraseña (scrypt + AES-256-GCM)…")
         act_dec = menu.addAction("Descifrar bóveda (.folioenc)")
         act_ano = menu.addAction("Exportar diagnóstico anonimizado (Ley 81)…")
 
         act_ver.triggered.connect(self._accion_verificar_sello)
         act_cif.triggered.connect(self._accion_cifrar_corrida_dpapi)
+        act_cif_pwd.triggered.connect(self._accion_cifrar_corrida_contrasena)
         act_dec.triggered.connect(self._accion_descifrar_corrida)
         act_ano.triggered.connect(self._accion_exportar_anonimizado)
         menu.exec(self.btn_seg_corrida.mapToGlobal(self.btn_seg_corrida.rect().bottomLeft()))
@@ -2500,6 +2503,43 @@ class VistaPortafolioWidget(QWidget):
         except ErrorSeguridad as exc:
             QMessageBox.warning(self, "Bóveda cifrada", str(exc))
 
+    def _accion_cifrar_corrida_contrasena(self) -> None:
+        if not self._carpeta_activa:
+            return
+        c1, ok1 = QInputDialog.getText(
+            self,
+            "Cifrar corrida en bóveda",
+            "Contraseña de bóveda (mínimo 10 caracteres):",
+            QLineEdit.EchoMode.Password,
+        )
+        if not ok1:
+            return
+        if len(c1) < 10:
+            QMessageBox.warning(self, "Bóveda cifrada", "La contraseña de bóveda debe tener al menos 10 caracteres.")
+            return
+        c2, ok2 = QInputDialog.getText(
+            self,
+            "Confirmar contraseña de bóveda",
+            "Confirma la contraseña de bóveda:",
+            QLineEdit.EchoMode.Password,
+        )
+        if not ok2:
+            return
+        if c1 != c2:
+            QMessageBox.warning(self, "Bóveda cifrada", "Las contraseñas ingresadas no coinciden.")
+            return
+        try:
+            generados = cifrar_carpeta_corrida(
+                self._carpeta_activa, contrasena=c1, usar_dpapi=False, borrar_origen=False
+            )
+            QMessageBox.information(
+                self,
+                "Bóveda cifrada",
+                f"Se generaron {len(generados)} respaldo(s) cifrado(s) .folioenc (scrypt + AES-256-GCM).",
+            )
+        except ErrorSeguridad as exc:
+            QMessageBox.warning(self, "Bóveda cifrada", str(exc))
+
     def _accion_descifrar_corrida(self) -> None:
         if not self._carpeta_activa:
             return
@@ -2511,6 +2551,25 @@ class VistaPortafolioWidget(QWidget):
                 f"Se descifraron {len(restaurados)} archivo(s) desde .folioenc.",
             )
         except ErrorSeguridad as exc:
+            if "contraseña" in str(exc).lower() or "scrypt" in str(exc).lower():
+                clave, ok = QInputDialog.getText(
+                    self,
+                    "Descifrar bóveda (.folioenc)",
+                    "Contraseña de la bóveda:",
+                    QLineEdit.EchoMode.Password,
+                )
+                if not ok:
+                    return
+                try:
+                    restaurados = descifrar_carpeta_corrida(self._carpeta_activa, contrasena=clave)
+                    QMessageBox.information(
+                        self,
+                        "Bóveda descifrada",
+                        f"Se descifraron {len(restaurados)} archivo(s) desde .folioenc.",
+                    )
+                except ErrorSeguridad as exc2:
+                    QMessageBox.warning(self, "Bóveda descifrada", str(exc2))
+                return
             QMessageBox.warning(self, "Bóveda descifrada", str(exc))
 
     def _accion_exportar_anonimizado(self) -> None:

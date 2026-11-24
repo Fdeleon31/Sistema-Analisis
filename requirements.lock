@@ -1,5 +1,5 @@
 # Lockfile generado offline desde el entorno activo (.venv) de Folio Auditor
-# Fecha UTC: 2026-11-22T16:20:26Z
+# Fecha UTC: 2026-11-22T20:29:23Z
 # Regenerar con: .\.venv\Scripts\python.exe herramientas\seguridad_build.py --lockfile requirements.lock
 altair==6.3.0
 altgraph==0.17.5

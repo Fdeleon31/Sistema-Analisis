@@ -213,3 +213,47 @@ def test_cuadra_spec_incluye_modulos_ciberseguridad_y_login():
         '"docs/seguridad"',
     ):
         assert mod in spec
+
+
+def test_cli_usuarios_aprovisionamiento_headless(tmp_path, monkeypatch, capsys):
+    import cuadra
+
+    monkeypatch.setenv("FOLIO_ADMIN_PASS", "AdminFolio#2026")
+    monkeypatch.setenv("FOLIO_PREP_PASS", "PrepFolio#2026")
+
+    assert cuadra.main(["usuarios", "--raiz", str(tmp_path), "--listar"]) == 0
+    salida_vacia = json.loads(capsys.readouterr().out)
+    assert salida_vacia["configurado"] is False
+    assert salida_vacia["usuarios"] == []
+
+    assert (
+        cuadra.main(
+            [
+                "usuarios",
+                "--raiz",
+                str(tmp_path),
+                "--inicializar-admin",
+                "admin_ti",
+                "--nombre-admin",
+                "Admin TI",
+                "--preparador",
+                "prep1",
+                "--nombre-preparador",
+                "Preparador Uno",
+            ]
+        )
+        == 0
+    )
+    _ = capsys.readouterr()
+
+    assert cuadra.main(["usuarios", "--raiz", str(tmp_path), "--listar"]) == 0
+    salida_llena = json.loads(capsys.readouterr().out)
+    assert salida_llena["configurado"] is True
+    usuarios_map = {u["usuario"]: u["perfil"] for u in salida_llena["usuarios"]}
+    assert usuarios_map == {"admin_ti": "Administrador", "prep1": "Preparador"}
+
+    gestor = GestorUsuarios(tmp_path)
+    ses_admin = gestor.autenticar("admin_ti", "AdminFolio#2026", modo_acceso="Administrador")
+    ses_prep = gestor.autenticar("prep1", "PrepFolio#2026", modo_acceso="Preparador")
+    assert ses_admin.es_admin is True
+    assert ses_prep.perfil == "Preparador"

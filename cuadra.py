@@ -47,6 +47,7 @@ from motor.rutas import raiz_recursos, raiz_trabajo
 from motor.seguridad import ErrorSeguridad, sanitizar_dataframe_excel
 from motor.servicio import ejecutar_encargo
 from motor.sintetico import generar, generar_diario_asientos, generar_estado_cuenta_bancos, generar_facturas_fe
+from motor.usuarios import GestorUsuarios
 
 RAIZ = raiz_trabajo()
 
@@ -230,6 +231,25 @@ def main(argv: list[str] | None = None) -> int:
     seg.add_argument("--dias-retencion", type=int, default=1825, help="Días de retención para --purgar-expiradas (defecto 1825)")
     seg.add_argument("--ejecutar-purga", action="store_true", help="Elimina efectivamente las corridas detectadas por --purgar-expiradas")
 
+    usu = sub.add_parser(
+        "usuarios",
+        help="Administración local de cuentas y roles (Administrador, Preparador, Revisor, Socio)",
+    )
+    usu.add_argument("--raiz", type=Path, default=None, help="Directorio raíz del almacén de seguridad (por defecto RAIZ)")
+    usu.add_argument("--listar", action="store_true", help="Lista usuarios registrados, políticas y estado sin exponer secretos")
+    usu.add_argument(
+        "--inicializar-admin",
+        metavar="USUARIO",
+        help="Inicializa el usuario Administrador local (lee contraseña de FOLIO_ADMIN_PASS o prompt oculto)",
+    )
+    usu.add_argument("--nombre-admin", default="Administrador TI", help="Nombre completo del Administrador inicial")
+    usu.add_argument(
+        "--preparador",
+        metavar="USUARIO",
+        help="Crea además el usuario Preparador inicial (lee contraseña de FOLIO_PREP_PASS o prompt oculto)",
+    )
+    usu.add_argument("--nombre-preparador", default="Auditor Preparador", help="Nombre completo del Preparador inicial")
+
     cop = sub.add_parser("copiloto", help="Traduce una pregunta en español a SQL visible y la ejecuta si se aprueba")
     cop.add_argument("--pregunta", required=True, help="Pregunta analítica en lenguaje natural")
     cop.add_argument("--archivo", action="append", default=[], help='"mayor=ruta" (opcional; por defecto usa ejemplo sintético)')
@@ -390,6 +410,53 @@ def main(argv: list[str] | None = None) -> int:
                     "carpetas": [str(p) for p in expiradas],
                 }, indent=2, ensure_ascii=False))
             return codigo_seg
+        elif args.comando == "usuarios":
+            def _leer_clave_confirmada(var_entorno: str, perfil_etq: str) -> str:
+                clave = os.environ.get(var_entorno) or ""
+                if not clave and sys.stdin and sys.stdin.isatty():
+                    c1 = getpass.getpass(f"Contraseña para {perfil_etq}: ")
+                    c2 = getpass.getpass(f"Confirmar contraseña de {perfil_etq}: ")
+                    if c1 != c2:
+                        raise ErrorSeguridad(f"Las contraseñas de {perfil_etq} no coinciden.")
+                    clave = c1
+                if not clave:
+                    raise ErrorSeguridad(
+                        f"Define {var_entorno} o ejecuta en consola interactiva para ingresar la contraseña de {perfil_etq}."
+                    )
+                return clave
+
+            gestor = GestorUsuarios(args.raiz or RAIZ)
+            if args.inicializar_admin:
+                pass_admin = _leer_clave_confirmada("FOLIO_ADMIN_PASS", "Administrador")
+                prep_dict: dict[str, str] | None = None
+                if args.preparador:
+                    prep_dict = {
+                        "usuario": args.preparador,
+                        "nombre_completo": args.nombre_preparador,
+                        "contrasena": _leer_clave_confirmada("FOLIO_PREP_PASS", "Preparador"),
+                    }
+
+                res_init = gestor.inicializar_firma(
+                    admin_usuario=args.inicializar_admin,
+                    admin_nombre=args.nombre_admin,
+                    admin_contrasena=pass_admin,
+                    preparador=prep_dict,
+                )
+                creados = ", ".join(f"{u['usuario']} ({u['perfil']})" for u in res_init["usuarios"])
+                print(f"Seguridad local inicializada en {gestor.carpeta_seguridad}. Usuarios creados: {creados}.")
+            if args.listar or not args.inicializar_admin:
+                print(
+                    json.dumps(
+                        {
+                            "configurado": gestor.existe_configuracion(),
+                            "politicas": gestor.politicas(),
+                            "usuarios": gestor.listar_usuarios(),
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                )
+            return 0
         elif args.comando == "copiloto":
             enc = cargar_encargo(args.encargo) if args.encargo else cargar_encargo(RAIZ / "encargos" / "ejemplo-2025.yaml")
             if not args.archivo:
